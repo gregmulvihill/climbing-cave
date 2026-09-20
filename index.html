@@ -88,6 +88,19 @@
   .shrow .sqty{font-variant-numeric:tabular-nums;font-weight:600}
   .shrow.bad .sdim{color:var(--bad)}
   #shapeDetail{margin-top:8px}
+  #profSvg{width:100%;height:auto;display:block;margin-top:4px;touch-action:none;
+    border:1px solid var(--line);border-radius:8px;background:rgba(127,127,127,.06)}
+  #profSvg .room{fill:none;stroke:var(--muted);stroke-width:.8;stroke-dasharray:3 3;opacity:.7}
+  #profSvg .axis{stroke:var(--muted);stroke-width:.8;opacity:.5}
+  #profSvg .band{stroke:var(--accent);stroke-width:1.8;fill:none;stroke-linejoin:round}
+  #profSvg .fillv{fill:var(--accent);opacity:.10}
+  #profSvg .vtx{fill:var(--panel);stroke:var(--accent);stroke-width:1.4}
+  #profSvg .vtx.on{fill:var(--accent)}
+  #profSvg .grab{fill:transparent;stroke:none;cursor:grab}
+  #profSvg text{fill:var(--muted);font-size:7px}
+  #profState{margin:7px 0 0;min-height:2.6em}
+  #profRead{min-height:2.4em}
+  html.touch #profSvg .vtx{stroke-width:1.8}
   #shapeDetail svg{width:100%;height:auto;display:block;
     border:1px solid var(--line);border-radius:8px;background:rgba(127,127,127,.06)}
   #shapeDetail .dl{display:grid;grid-template-columns:auto 1fr;gap:2px 8px;
@@ -166,13 +179,30 @@
     <div class="hd"><span class="caret">&#9660;</span>Cave shape<span class="sum" id="sumShape"></span></div>
     <div class="bd">
       <div class="lbl">Hole diameter <span class="val" id="vHole">4.0 ft</span></div>
-      <input type="range" id="sHole" min="0" max="8" step="0.5" value="4">
+      <input type="range" id="sHole" min="0" max="16" step="0.5" value="4">
       <div class="lbl">Ceiling at apex <span class="val" id="vCeil">8 ft</span></div>
-      <input type="range" id="sCeil" min="4" max="10" step="0.25" value="8">
+      <input type="range" id="sCeil" min="4" max="12" step="0.25" value="8">
       <div class="lbl">Panels along the arc <span class="val" id="vNa">10</span></div>
       <input type="range" id="sNa" min="4" max="18" step="1" value="10">
       <div class="lbl">Panels around the tube <span class="val" id="vNb">6</span></div>
       <input type="range" id="sNb" min="3" max="12" step="1" value="6">
+    </div>
+  </div>
+
+  <div class="sec closed" id="secProfile">
+    <div class="hd"><span class="caret">&#9660;</span>Cross-section<span class="sum" id="sumProf"></span></div>
+    <div class="bd">
+      <svg id="profSvg" viewBox="0 0 150 175" preserveAspectRatio="xMidYMid meet"></svg>
+      <p class="sub" id="profState"></p>
+      <div id="profRead" class="note"></div>
+      <div class="row" style="margin-top:8px">
+        <button id="pSplit">Split band</button>
+        <button id="pDel" class="danger">Delete point</button>
+        <button id="pReset">Reset profile</button>
+      </div>
+      <div class="note">Each point is a panel-band edge, so the shell has one band
+        fewer than it has points. Drag a point to move it; the shape is swept a
+        half turn about the centre axis.</div>
     </div>
   </div>
 
@@ -247,6 +277,8 @@
       <input type="range" id="sFov" min="25" max="115" step="1" value="62">
       <div class="lbl">Move speed <span class="val" id="vSpeed">9</span></div>
       <input type="range" id="sSpeed" min="2" max="40" step="1" value="9">
+      <div class="lbl">Drag behaviour</div>
+      <div class="row"><button id="tInvert" class="on">Model follows drag</button></div>
       <div class="lbl">Jump to</div>
       <div class="row">
         <button data-view="out">Outside</button>
@@ -265,6 +297,7 @@
         <button id="bCopy">Copy config</button>
         <button id="bPaste">Load config</button>
         <button id="bLink">Share link</button>
+        <button id="bForget" class="danger">Forget saved setup</button>
       </div>
       <textarea id="cfgBox" spellcheck="false" placeholder="Paste a config here, then press Load config"></textarea>
       <div id="cfgMsg" class="note"></div>
@@ -311,7 +344,7 @@
 </div>
 
 <div id="help" class="panel">
-  <b>Drag</b> look &middot; <b>click</b> select &middot; <b>WASD</b> move &middot; <b>Q/Z</b> up-down &middot; <b>scroll</b> speed &middot; <b>pinch</b> dolly
+  <b>Drag</b> look (direction set in View) &middot; <b>click</b> select &middot; <b>WASD</b> move &middot; <b>Q/Z</b> up-down &middot; <b>scroll</b> speed &middot; <b>pinch</b> dolly
 </div>
 
 <div id="pad">
@@ -365,18 +398,82 @@
 
   // ---------- parameters ----------
   var P={hole:4, ceil:8, na:10, nb:6, den:0.35, ht:2, base:0.70, trunc:0.40, sym:0, seed:7,
-         hold:0, hseed:11};
+         hold:0, hseed:11, prof:null};
   function mkRng(seed){ var x=seed>>>0;
     return function(){ x=(x*1664525+1013904223)>>>0; return x/4294967296; }; }
   function ringR(){ return 5+P.hole/4; }
   function tubeR(){ return 5-P.hole/4; }
-  function pt(th,ph){
-    var rad=ringR()+tubeR()*Math.cos(ph);
-    return new THREE.Vector3(rad*Math.cos(th), P.ceil*Math.sin(ph), -rad*Math.sin(th));
+
+  // ---------- cross-section profile ----------
+  // The shell is a surface of revolution: this profile, given as [radius,
+  // height] pairs in feet, swept a half turn about the torus axis. Index 0 sits
+  // at the outer floor edge and the last index at the inner floor edge, so each
+  // consecutive pair of vertices is one band of panels. P.prof is null while the
+  // shape is generated from the sliders, and holds an array once hand-edited.
+  function genProfile(){
+    var R=ringR(), t=tubeR(), n=Math.max(2,P.nb), a=[];
+    for(var j=0;j<=n;j++){
+      var ph=Math.PI*j/n;
+      a.push([+(R+t*Math.cos(ph)).toFixed(4), +(P.ceil*Math.sin(ph)).toFixed(4)]);
+    }
+    return a;
   }
-  function backPt(th,ph,off){
-    var rad=ringR()+(tubeR()+off)*Math.cos(ph);
-    return new THREE.Vector3(rad*Math.cos(th),(P.ceil+off)*Math.sin(ph),-rad*Math.sin(th));
+  function profile(){ return P.prof || genProfile(); }
+  function profCustom(){ return !!P.prof; }
+
+  // What the profile actually measures, as opposed to what the sliders ask for.
+  // With a hand-edited profile these are the truth and the sliders follow them.
+  function measureProfile(){
+    var pr=profile(), n=pr.length, apex=0;
+    for(var j=0;j<n;j++) if(pr[j][1]>apex) apex=pr[j][1];
+    return { hole:2*pr[n-1][0], apex:apex, outer:pr[0][0] };
+  }
+  // Scale a hand-edited profile to hit the slider's target instead of throwing
+  // it away and regenerating. Radii scale about the outer edge, which the room
+  // pins at 10 ft; heights scale about the floor. Both normalise to an absolute
+  // target, so re-applying is a no-op and repeated drags cannot accumulate drift.
+  function applyProfTransform(){
+    var pr=P.prof;
+    if(!pr) return;
+    var n=pr.length, rOut=pr[0][0], rIn=pr[n-1][0], apex=0;
+    for(var j=0;j<n;j++) if(pr[j][1]>apex) apex=pr[j][1];
+    var den=rOut-rIn;
+    var kR=Math.abs(den)<1e-6 ? 1 : (rOut-P.hole/2)/den;
+    var kY=apex>1e-6 ? (P.ceil/apex) : 1;
+    P.prof=pr.map(function(q){
+      return [ +(rOut+(q[0]-rOut)*kR).toFixed(3), +(q[1]*kY).toFixed(3) ];
+    });
+  }
+  // Keep the shape sliders reading the profile's real dimensions.
+  function syncShapeSliders(){
+    var m=measureProfile();
+    P.hole=Math.max(0,Math.min(16,+m.hole.toFixed(2)));
+    P.ceil=Math.max(4,Math.min(12,+m.apex.toFixed(2)));
+    syncSliders();
+  }
+  // P.nb must always equal the band count, since the panel grid and every cut
+  // list downstream is indexed by it.
+  function syncNb(){ P.nb = profile().length-1; }
+
+  function pt(th,j){
+    var p=profile()[j];
+    return new THREE.Vector3(p[0]*Math.cos(th), p[1], -p[0]*Math.sin(th));
+  }
+  // The frame sits a fixed distance behind the shell, so offset each profile
+  // vertex along the 2D normal of the profile rather than scaling the axes
+  // independently, which only happened to work for an ellipse.
+  function offsetProfile(off){
+    var pr=profile(), n=pr.length, out=[];
+    for(var j=0;j<n;j++){
+      var a=pr[Math.max(0,j-1)], b=pr[Math.min(n-1,j+1)];
+      var dx=b[0]-a[0], dy=b[1]-a[1], L=Math.sqrt(dx*dx+dy*dy)||1;
+      out.push([pr[j][0]+(dy/L)*off, pr[j][1]-(dx/L)*off]);
+    }
+    return out;
+  }
+  function backPt(th,j,off,cache){
+    var p=(cache||offsetProfile(off))[j];
+    return new THREE.Vector3(p[0]*Math.cos(th), p[1], -p[0]*Math.sin(th));
   }
   function wrap(x){ while(x>Math.PI)x-=2*Math.PI; while(x<-Math.PI)x+=2*Math.PI; return x; }
 
@@ -695,11 +792,12 @@
   }
 
   function rebuild(){
+    syncNb();
     var na=P.na, nb=P.nb;
     gpts=[];
     for(var i=0;i<=na;i++){
       gpts[i]=[];
-      for(var j=0;j<=nb;j++) gpts[i][j]=pt(Math.PI*i/na, Math.PI*j/nb);
+      for(var j=0;j<=nb;j++) gpts[i][j]=pt(Math.PI*i/na, j);
     }
     clearGroup(panelGroup); clearGroup(volGroup);
     shapes=[]; shapeIdx={};
@@ -776,15 +874,15 @@
       }
     }
 
-    var off=0.55, framePts=[];
+    var off=0.55, framePts=[], offPr=offsetProfile(off);
     for(var i4=0;i4<=na;i4++)
       for(var j4=0;j4<nb;j4++){
-        var a=backPt(Math.PI*i4/na,Math.PI*j4/nb,off), c2=backPt(Math.PI*i4/na,Math.PI*(j4+1)/nb,off);
+        var a=backPt(Math.PI*i4/na,j4,off,offPr), c2=backPt(Math.PI*i4/na,j4+1,off,offPr);
         framePts.push(a.x,a.y,a.z,c2.x,c2.y,c2.z);
       }
     for(var j5=0;j5<=nb;j5++)
       for(var i5=0;i5<na;i5++){
-        var a2=backPt(Math.PI*i5/na,Math.PI*j5/nb,off), c3=backPt(Math.PI*(i5+1)/na,Math.PI*j5/nb,off);
+        var a2=backPt(Math.PI*i5/na,j5,off,offPr), c3=backPt(Math.PI*(i5+1)/na,j5,off,offPr);
         framePts.push(a2.x,a2.y,a2.z,c3.x,c3.y,c3.z);
       }
 
@@ -810,8 +908,12 @@
     var sheets=Math.ceil(shArea/(SHEET_L*SHEET_W)*1.25);
     document.getElementById('vSheets').textContent=
       (na*nb)+' panels \u00b7 '+nb+' unique \u00b7 ~'+sheets+' sheets \u00b7 '+nVol+' volumes ('+nChop+' chopped)';
+    var pr0=profile(), holeFt=2*pr0[pr0.length-1][0], apexFt=0;
+    pr0.forEach(function(q){ if(q[1]>apexFt) apexFt=q[1]; });
     document.getElementById('sumShape').textContent =
-      (na*nb)+' panels \u00b7 '+P.hole.toFixed(1)+"' hole";
+      (na*nb)+' panels \u00b7 '+holeFt.toFixed(1)+"' hole";
+    document.getElementById('sumProf').textContent =
+      pr0.length+' pts \u00b7 '+apexFt.toFixed(1)+"' high";
     document.getElementById('sumVol').textContent = nVol+' volumes';
     document.getElementById('sumHold').textContent =
       P.hold>0 ? (nHolds+' holds') : 'none';
@@ -1037,15 +1139,22 @@
       }
     });
     Object.keys(volDeleted).forEach(function(k){ if(volDeleted[k]) del.push(k); });
-    return {v:1, p:[P.hole,P.ceil,P.na,P.nb,P.den,P.ht,P.base,P.trunc,P.sym,P.seed,
-                    P.hold,P.hseed], e:edits, d:del};
+    var c={v:2, p:[P.hole,P.ceil,P.na,P.nb,P.den,P.ht,P.base,P.trunc,P.sym,P.seed,
+                   P.hold,P.hseed], e:edits, d:del};
+    if(P.prof) c.pr=P.prof.map(function(q){ return [+q[0].toFixed(3), +q[1].toFixed(3)]; });
+    return c;
   }
   function importCfg(cfg){
-    if(!cfg||cfg.v!==1) throw new Error('unrecognised config');
+    if(!cfg || (cfg.v!==1 && cfg.v!==2)) throw new Error('unrecognised config');
     var a=cfg.p;
     P.hole=a[0]; P.ceil=a[1]; P.na=a[2]; P.nb=a[3]; P.den=a[4];
     P.ht=a[5]; P.base=a[6]; P.trunc=a[7]; P.sym=a[8]; P.seed=a[9];
     if(a.length>10){ P.hold=a[10]; P.hseed=a[11]; }
+    // v1 predates hand-edited profiles, so it always means the generated shape.
+    P.prof = (cfg.v===2 && cfg.pr && cfg.pr.length>=3) ? cfg.pr.map(function(q){
+      return [+q[0], +q[1]];
+    }) : null;
+    syncNb();
     vol={}; volDeleted={}; regen(false);
     Object.keys(cfg.e||{}).forEach(function(k){
       var v=cfg.e[k];
@@ -1055,7 +1164,10 @@
     syncSliders();
     sel=null; shapeSel=null;
     rebuild();
+    if(typeof drawProfile==='function') drawProfile();
+    if(cfg.view) importView(cfg.view);   // full-state links carry the camera too
   }
+  function exportFull(){ var c=exportCfg(); c.view=exportView(); return c; }
   function syncSliders(){
     var map=[['sHole','vHole','hole',1,function(v){return v.toFixed(1)+' ft';}],
              ['sCeil','vCeil','ceil',1,function(v){return (Math.round(v*100)/100)+' ft';}],
@@ -1084,7 +1196,7 @@
   function msg(t){ document.getElementById('cfgMsg').textContent=t; }
   var cfgBox=document.getElementById('cfgBox');
   document.getElementById('bCopy').onclick=function(){
-    var str=encode(exportCfg());
+    var str=encode(exportFull());
     cfgBox.classList.add('show'); cfgBox.value=str;
     cfgBox.focus(); cfgBox.select();
     if(navigator.clipboard && navigator.clipboard.writeText){
@@ -1102,7 +1214,7 @@
     catch(err){ msg('That config could not be read.'); }
   };
   document.getElementById('bLink').onclick=function(){
-    var str=encode(exportCfg());
+    var str=encode(exportFull());
     var base=location.href.split('#')[0];
     var url=base+'#cfg='+str;
     cfgBox.classList.add('show'); cfgBox.value=url;
@@ -1123,10 +1235,212 @@
         fetch(decodeURIComponent(q[1])).then(function(r){ return r.json(); })
           .then(function(j){ importCfg(j); msg('Loaded from file.'); })
           .catch(function(){ msg('Could not load that config file.'); });
+        return true;
       }
     }catch(e){ msg('Config in the address could not be read.'); }
     return false;
   }
+
+  // ---------- cross-section editor ----------
+  // Draws the profile in the radius/height half-plane and lets you drag its
+  // vertices. Editing promotes the generated profile to a hand-edited one; the
+  // sliders above stop driving the shape until you reset it.
+  var VB={w:150,h:175,ml:20,mr:10,mt:10,mb:26};
+  var RMAX=10, YMAX=12;                       // room half-width and height, feet
+  var SC=Math.min((VB.w-VB.ml-VB.mr)/RMAX, (VB.h-VB.mt-VB.mb)/YMAX);
+  var SNAP=0.25;
+  function pX(r){ return VB.ml + r*SC; }
+  function pY(y){ return VB.h-VB.mb - y*SC; }
+  function pInvX(x){ return (x-VB.ml)/SC; }
+  function pInvY(y){ return (VB.h-VB.mb-y)/SC; }
+  function snap(v){ return Math.round(v/SNAP)*SNAP; }
+
+  var profSvg=document.getElementById('profSvg');
+  var profSel=null, profDrag=null;
+
+  function makeCustom(){
+    if(!P.prof) P.prof=profile().map(function(q){ return [q[0],q[1]]; });
+    return P.prof;
+  }
+  function drawProfile(){
+    var pr=profile(), n=pr.length, s='';
+    s+='<rect class="room" x="'+pX(0)+'" y="'+pY(YMAX)+'" width="'+(RMAX*SC)+
+       '" height="'+(YMAX*SC)+'"/>';
+    s+='<line class="axis" x1="'+pX(0)+'" y1="'+pY(0)+'" x2="'+pX(0)+'" y2="'+pY(YMAX)+'"/>';
+    var d=pr.map(function(q,i){ return (i?'L':'M')+pX(q[0]).toFixed(1)+' '+pY(q[1]).toFixed(1); }).join(' ');
+    s+='<path class="fillv" d="'+d+' L'+pX(pr[n-1][0]).toFixed(1)+' '+pY(0).toFixed(1)+
+       ' L'+pX(pr[0][0]).toFixed(1)+' '+pY(0).toFixed(1)+' Z"/>';
+    s+='<path class="band" d="'+d+'"/>';
+    for(var i=0;i<n;i++){
+      s+='<circle class="vtx'+(profSel===i?' on':'')+'" cx="'+pX(pr[i][0]).toFixed(1)+
+         '" cy="'+pY(pr[i][1]).toFixed(1)+'" r="'+(profSel===i?3.6:2.8)+'"/>';
+      s+='<circle class="grab" data-i="'+i+'" cx="'+pX(pr[i][0]).toFixed(1)+
+         '" cy="'+pY(pr[i][1]).toFixed(1)+'" r="9"/>';
+    }
+    s+='<text x="'+pX(0)+'" y="'+(VB.h-VB.mb+9)+'" text-anchor="middle">axis</text>';
+    s+='<text x="'+pX(RMAX)+'" y="'+(VB.h-VB.mb+9)+'" text-anchor="middle">'+RMAX+"' </text>";
+    s+='<text x="'+(VB.ml-4)+'" y="'+(pY(YMAX)+3)+'" text-anchor="end">'+YMAX+"'</text>";
+    profSvg.innerHTML=s;
+    // sumProf is written by rebuild(), which knows the measured apex height
+    document.getElementById('profState').textContent = profCustom()
+      ? 'Hand-edited \u2014 '+n+' points, '+(n-1)+' bands. Hole and ceiling now scale '+
+        'this shape; the point count comes from the points themselves.'
+      : 'Generated from the shape sliders.';
+    var rd=document.getElementById('profRead');
+    rd.textContent = profSel==null ? 'No point selected.'
+      : 'Point '+(profSel+1)+' of '+n+'  \u00b7  radius '+pr[profSel][0].toFixed(2)+
+        " ft  \u00b7  height "+pr[profSel][1].toFixed(2)+' ft';
+  }
+
+  function svgPoint(e){
+    // Use the element's own transform rather than measuring its box: the panel
+    // scrolls and the SVG can letterbox, and both throw off manual arithmetic.
+    var m=profSvg.getScreenCTM();
+    if(!m) return {x:0,y:0};
+    var q;
+    if(profSvg.createSVGPoint){
+      var sp=profSvg.createSVGPoint(); sp.x=e.clientX; sp.y=e.clientY;
+      q=sp.matrixTransform(m.inverse());
+    } else {
+      q=new DOMPoint(e.clientX,e.clientY).matrixTransform(m.inverse());
+    }
+    return {x:q.x, y:q.y};
+  }
+  profSvg.addEventListener('pointerdown',function(e){
+    var t=e.target, idx=t&&t.getAttribute&&t.getAttribute('data-i');
+    if(idx==null) return;
+    e.preventDefault();
+    profSel=+idx; profDrag=+idx;
+    profSvg.setPointerCapture(e.pointerId);
+    drawProfile(); markDirty();
+  });
+  profSvg.addEventListener('pointermove',function(e){
+    if(profDrag==null) return;
+    e.preventDefault();
+    var p=svgPoint(e), pr=makeCustom();
+    pr[profDrag]=[ Math.max(0,Math.min(RMAX,snap(pInvX(p.x)))),
+                   Math.max(0,Math.min(YMAX,snap(pInvY(p.y)))) ];
+    rebuild(); syncShapeSliders(); drawProfile(); markDirty();
+  });
+  ['pointerup','pointercancel'].forEach(function(ev){
+    profSvg.addEventListener(ev,function(){ profDrag=null; });
+  });
+
+  document.getElementById('pSplit').onclick=function(){
+    var pr=makeCustom();
+    var i=(profSel==null||profSel>=pr.length-1) ? 0 : profSel;   // split the band after the point
+    pr.splice(i+1,0,[ snap((pr[i][0]+pr[i+1][0])/2), snap((pr[i][1]+pr[i+1][1])/2) ]);
+    profSel=i+1;
+    syncNb(); sel=null; clearState(); rebuild(); syncShapeSliders(); drawProfile();
+  };
+  document.getElementById('pDel').onclick=function(){
+    var pr=makeCustom();
+    if(pr.length<=3){ document.getElementById('profRead').textContent=
+      'A profile needs at least three points.'; return; }
+    if(profSel==null){ document.getElementById('profRead').textContent=
+      'Select a point first.'; return; }
+    pr.splice(profSel,1);
+    profSel=Math.min(profSel,pr.length-1);
+    syncNb(); sel=null; clearState(); rebuild(); syncShapeSliders(); drawProfile();
+  };
+  document.getElementById('pReset').onclick=function(){
+    P.prof=null; profSel=null;
+    syncNb(); sel=null; clearState(); rebuild(); syncSliders(); drawProfile();
+  };
+
+
+  // The shareable config (above) deliberately holds only what regenerates the
+  // model, so it stays short enough for a URL. This is the wider snapshot: it
+  // adds where you were standing, where you were looking, and every view
+  // setting, and lives in this browser only.
+  // ---------- session persistence ----------
+  var LSKEY='climbingCave.session.v2';
+  var lsOK=(function(){
+    try{ localStorage.setItem('__cc','1'); localStorage.removeItem('__cc'); return true; }
+    catch(e){ return false; }   // private mode, or storage disabled
+  })();
+
+  // Stable orderings, so toggles and section states can travel as bit strings
+  // rather than as keyed objects. Appending is safe; reordering is not.
+  var TG_KEYS=['tVols','tHolds','tWire','tSeams','tFrame','tFig','tWalls','tLamp','tInvert'];
+  var SEC_KEYS=['secShape','secVol','secHold','secShow','secColor','secView','secSave','secShapes','secProfile'];
+  var COL_KEYS=['cPanel','cVol','cHold','cSeam','cFrame','cFig','cFloor','cWall','cBg'];
+
+  function exportView(){
+    return {
+      cam:[+pos.x.toFixed(2),+pos.y.toFixed(2),+pos.z.toFixed(2)],
+      yaw:+yaw.toFixed(3), pitch:+pitch.toFixed(3),
+      speed:Math.round(speed), fov:parseFloat(fovEl.value),
+      t:TG_KEYS.map(function(k){ return toggles[k] && toggles[k].get() ? '1':'0'; }).join(''),
+      s:SEC_KEYS.map(function(id){
+        var el=document.getElementById(id);
+        return el && el.classList.contains('closed') ? '1':'0';
+      }).join(''),
+      c:COL_KEYS.map(function(id){ return document.getElementById(id).value.replace('#',''); }).join('')
+    };
+  }
+  function importView(v){
+    if(!v) return;
+    if(v.cam && v.cam.length===3) pos.set(v.cam[0],v.cam[1],v.cam[2]);
+    if(typeof v.yaw==='number')   yaw=v.yaw;
+    if(typeof v.pitch==='number') pitch=Math.max(-1.5,Math.min(1.5,v.pitch));
+    if(typeof v.speed==='number') setSpeed(v.speed);
+    if(typeof v.fov==='number'){ fovEl.value=v.fov; fovEl.oninput(); }
+    if(typeof v.t==='string') TG_KEYS.forEach(function(k,n){
+      if(toggles[k] && v.t[n]!=null) toggles[k].set(v.t[n]==='1');
+    });
+    if(typeof v.s==='string') SEC_KEYS.forEach(function(id,n){
+      var el=document.getElementById(id);
+      if(el && v.s[n]!=null) el.classList.toggle('closed', v.s[n]==='1');
+    });
+    if(typeof v.c==='string') COL_KEYS.forEach(function(id,n){
+      var hexv='#'+v.c.substr(n*6,6);
+      var el=document.getElementById(id);
+      if(el && APPLY[id] && /^#[0-9a-fA-F]{6}$/.test(hexv)){ el.value=hexv; APPLY[id](hexv); }
+    });
+  }
+
+  var dirty=false, saveSuspended=false;
+  function markDirty(){ dirty=true; }
+  function saveSession(){
+    if(!lsOK || saveSuspended) return;
+    dirty=false;
+    try{ localStorage.setItem(LSKEY, JSON.stringify({v:2, cfg:exportCfg(), view:exportView()})); }
+    catch(e){ /* out of quota; keep running rather than interrupt the session */ }
+  }
+  function loadSession(){
+    if(!lsOK) return null;
+    try{
+      var raw=localStorage.getItem(LSKEY);
+      if(!raw) return null;
+      var s=JSON.parse(raw);
+      return (s && s.v===2) ? s : null;
+    }catch(e){ return null; }
+  }
+  function forgetSession(){
+    if(lsOK){ try{ localStorage.removeItem(LSKEY); }catch(e){} }
+  }
+
+  // Any interaction with either panel counts as a change worth saving.
+  ['input','change','click'].forEach(function(ev){
+    document.getElementById('ui').addEventListener(ev, markDirty, true);
+    document.getElementById('sel').addEventListener(ev, markDirty, true);
+  });
+
+  setInterval(function(){ if(dirty) saveSession(); }, 1000);
+  addEventListener('pagehide', function(){ if(dirty) saveSession(); });
+  document.addEventListener('visibilitychange', function(){
+    if(document.visibilityState==='hidden' && dirty) saveSession();
+  });
+
+  document.getElementById('bForget').onclick=function(){
+    // The click itself would otherwise mark the session dirty and the next
+    // autosave would write it straight back, so stop saving until a reload.
+    forgetSession();
+    saveSuspended=true;
+    msg('Saved setup cleared. Nothing further is saved until you reload.');
+  };
+
 
   // ---------- picking ----------
   var ray=new THREE.Raycaster(), ndc=new THREE.Vector2();
@@ -1153,11 +1467,20 @@
     var el=document.getElementById(id);
     var pct=(k==='den'||k==='base'||k==='trunc'||k==='sym'||k==='hold');
     el.oninput=function(){
+      if(k==='nb' && profCustom()){
+        // the band count belongs to the profile; Split and Delete change it
+        syncNb();
+        el.value=P.nb;
+        document.getElementById(vid).textContent=fmt(P.nb);
+        return;
+      }
       P[k]=parseFloat(el.value)/(pct?100:1);
       document.getElementById(vid).textContent=fmt(P[k]);
+      if((k==='hole'||k==='ceil') && profCustom()) applyProfTransform();
       if(k==='na'||k==='nb'){ sel=null; clearState(); }
       else if(k==='den'||k==='ht'||k==='base'||k==='trunc'||k==='sym') regen(true);
       rebuild();
+      if(k==='hole'||k==='ceil'||k==='nb') drawProfile();
     };
     document.getElementById(vid).textContent=fmt(P[k]);
   }
@@ -1182,9 +1505,12 @@
     sel=null; clearState(); rebuild();
   };
 
+  var toggles={};
   function toggle(id,fn,init){
     var el=document.getElementById(id), on=init;
-    el.onclick=function(){ on=!on; fn(on); el.classList.toggle('on',on); };
+    function set(v){ on=!!v; fn(on); el.classList.toggle('on',on); }
+    el.onclick=function(){ set(!on); };
+    toggles[id]={get:function(){ return on; }, set:set};
   }
   toggle('tVols',function(v){ volGroup.visible=v; volSeams.visible=v; },true);
   toggle('tHolds',function(v){ holdMesh.visible=v; },true);
@@ -1196,6 +1522,14 @@
   toggle('tFig',function(v){ fig.visible=v; },true);
   toggle('tWalls',function(v){ walls.visible=v; edges.visible=v; },true);
   toggle('tLamp',function(v){ lamp.visible=v; },true);
+
+  // +1 drags the model with the pointer (the model goes the way you drag);
+  // -1 drags the camera instead, which makes the model go the opposite way.
+  var dragSign=1;
+  toggle('tInvert',function(v){
+    dragSign = v ? 1 : -1;
+    document.getElementById('tInvert').textContent = v ? 'Model follows drag' : 'Camera follows drag';
+  },true);
 
   var DEF={cPanel:0xbdb5a7, cVol:0x8f7550, cHold:0x1f6fb2, cSeam:dark?0x24262a:0x3a3733, cFrame:0x9a7038,
            cFig:0xc4462a, cFloor:dark?0x2b2d2f:0xd9d5ce, cWall:dark?0x34373b:0xd0ccc5,
@@ -1268,7 +1602,7 @@
                               Math.sin(pitch),
                              -Math.cos(yaw)*Math.cos(pitch));
   }
-  function dolly(units){ pos.addScaledVector(fwdVec(), units); }
+  function dolly(units){ pos.addScaledVector(fwdVec(), units); markDirty(); }
 
   function pinchDist(){
     var a=[]; for(var id in pts) a.push(pts[id]);
@@ -1297,9 +1631,10 @@
     if(!drag) return;
     var dx=e.clientX-lx, dy=e.clientY-ly;
     moved+=Math.abs(dx)+Math.abs(dy);
-    yaw-=dx*0.005; pitch-=dy*0.005;
+    yaw+=dragSign*dx*0.005; pitch+=dragSign*dy*0.005;
     pitch=Math.max(-1.5,Math.min(1.5,pitch));
     lx=e.clientX; ly=e.clientY;
+    markDirty();
   });
 
   function endPointer(e){
@@ -1365,7 +1700,7 @@
     if(keys['a']||pad.l)v.sub(right);
     if(keys['q']||pad.u)v.y+=1;
     if(keys['z']||pad.d)v.y-=1;
-    if(v.lengthSq()>0) pos.addScaledVector(v.normalize(), speed*dt);
+    if(v.lengthSq()>0){ pos.addScaledVector(v.normalize(), speed*dt); markDirty(); }
     camera.position.copy(pos); lamp.position.copy(pos);
     camera.lookAt(pos.clone().add(fwd));
     renderer.render(scene,camera);
@@ -1384,8 +1719,23 @@
   addEventListener('resize',resize);
   addEventListener('orientationchange',function(){ setTimeout(resize,120); });
   if(window.visualViewport) visualViewport.addEventListener('resize',resize);
-  resize(); clearState(); rebuild();
-  loadFromAddress();
+  resize(); clearState(); rebuild(); drawProfile();
+  // A config in the address is an explicit request and wins over the saved
+  // session; otherwise pick up exactly where this browser left off.
+  if(!loadFromAddress()){
+    var saved=loadSession();
+    if(saved){
+      try{
+        if(saved.cfg) importCfg(saved.cfg);
+        importView(saved.view);
+        drawProfile();
+        msg('Restored your last setup.');
+      }catch(e){
+        forgetSession();          // corrupt or from an older build: start clean
+        msg('Saved setup could not be read, so it was discarded.');
+      }
+    }
+  }
   tick();
 })();
 </script>
