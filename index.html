@@ -47,10 +47,10 @@
   .row{display:flex;gap:5px;flex-wrap:wrap}
   button{font:inherit;font-size:11.5px;color:var(--ink);background:transparent;
     border:1px solid var(--line);border-radius:8px;padding:5px 8px;cursor:pointer}
-  button:hover{border-color:var(--accent)}
+  @media (hover:hover){ button:hover{border-color:var(--accent)} }
   button.on{background:var(--accent);border-color:var(--accent);color:#fff}
   button.danger{border-color:var(--bad);color:var(--bad)}
-  button.danger:hover{background:var(--bad);color:#fff}
+  @media (hover:hover){ button.danger:hover{background:var(--bad);color:#fff} }
   button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
   input[type=range]{width:100%;accent-color:var(--accent);margin:2px 0}
   table{width:100%;border-collapse:collapse;font-size:11.5px;margin-top:6px}
@@ -68,7 +68,7 @@
   .sec:first-child{border-top:none}
   .hd{display:flex;align-items:center;gap:7px;cursor:pointer;padding:9px 0 7px;user-select:none;
     font-size:10.5px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted)}
-  .hd:hover{color:var(--ink)}
+  @media (hover:hover){ .hd:hover{color:var(--ink)} }
   .hd .caret{display:inline-block;font-size:9px;transition:transform .15s;flex:none}
   .sec.closed .caret{transform:rotate(-90deg)}
   .sec.closed .bd{display:none}
@@ -81,7 +81,7 @@
   .shrow{display:flex;gap:8px;align-items:baseline;padding:5px 8px;cursor:pointer;
     border-bottom:1px solid var(--line);font-size:11.5px}
   .shrow:last-child{border-bottom:none}
-  .shrow:hover{background:rgba(180,84,31,.12)}
+  @media (hover:hover){ .shrow:hover{background:rgba(180,84,31,.12)} }
   .shrow.on{background:rgba(47,168,85,.20)}
   .shrow .sid{font-variant-numeric:tabular-nums;color:var(--muted);min-width:26px}
   .shrow .sdim{flex:1;font-variant-numeric:tabular-nums}
@@ -103,18 +103,60 @@
   #help{right:10px;bottom:calc(10px + env(safe-area-inset-bottom,0px));
     font-size:11.5px;color:var(--muted);max-width:214px}
   #help b{color:var(--ink)}
+
+  /* ---- stacking ---- */
+  #ui,#sel{z-index:2}
+  #pad{z-index:3}
+  #uiToggle{z-index:4}
+
+  /* ---- controls drawer toggle (mobile only) ---- */
+  #uiToggle{display:none;position:absolute;left:10px;
+    top:calc(10px + env(safe-area-inset-top,0px));
+    min-height:40px;padding:8px 14px;font-size:13px;border-radius:10px;
+    background:var(--panel);border:1px solid var(--line);color:var(--ink);
+    backdrop-filter:blur(8px);cursor:pointer}
+  #uiToggle.on{background:var(--accent);border-color:var(--accent);color:#fff}
+
+  /* ---- movement pad: shown whenever the device has no keyboard ---- */
+  #pad{display:none;position:absolute;right:12px;
+    bottom:calc(14px + env(safe-area-inset-bottom,0px));
+    grid-template-columns:repeat(3,52px);grid-template-rows:repeat(2,52px);gap:6px}
+  #pad button{border-radius:10px;background:var(--panel);font-size:17px;
+    backdrop-filter:blur(8px);touch-action:none;-webkit-user-select:none;user-select:none}
+  #pad button:active{background:var(--accent);border-color:var(--accent);color:#fff}
+  html.touch #pad{display:grid}
+
+  /* ---- touch devices: bigger hit targets ---- */
+  html.touch button{font-size:13px;padding:9px 12px;border-radius:9px}
+  html.touch .hd{padding:13px 0 11px;font-size:11.5px}
+  html.touch .shrow{padding:10px 9px;font-size:12.5px}
+  html.touch .colors input[type=color]{width:44px;height:30px}
+  html.touch input[type=range]{height:30px}
+  html.touch .shapelist{max-height:240px}
+  html.touch #pad button{padding:0}
+
+  /* ---- narrow screens ---- */
   @media (max-width:900px){
-    #ui{width:calc(100vw - 20px)}
-    #sel{width:calc(100vw - 20px);top:auto;bottom:calc(10px + env(safe-area-inset-bottom,0px))}
-    #help{display:none} #pad{display:none !important}
+    #help{display:none}
+    #uiToggle{display:block}
+    #ui{display:none;width:calc(100vw - 20px);
+      top:calc(60px + env(safe-area-inset-top,0px));
+      max-height:calc(100% - 74px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));
+      -webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+    body.ui-open #ui{display:block}
+    #sel{width:calc(100vw - 20px);top:auto;
+      bottom:calc(10px + env(safe-area-inset-bottom,0px));
+      max-height:52vh;overflow:auto;-webkit-overflow-scrolling:touch;
+      overscroll-behavior:contain}
+    /* keep the selection sheet clear of the movement pad */
+    html.touch #sel{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
   }
-  #pad{display:none;position:absolute;right:12px;bottom:calc(14px + env(safe-area-inset-bottom,0px));
-    grid-template-columns:repeat(3,46px);grid-template-rows:repeat(2,46px);gap:5px}
-  #pad button{border-radius:10px;background:var(--panel);font-size:15px}
 </style>
 </head>
 <body>
 <div id="stage"></div>
+
+<button id="uiToggle" aria-expanded="false">Controls</button>
 
 <div id="ui" class="panel">
   <h1>Climbing Cave</h1>
@@ -203,6 +245,8 @@
     <div class="bd">
       <div class="lbl">Field of view <span class="val" id="vFov">62&deg;</span></div>
       <input type="range" id="sFov" min="25" max="115" step="1" value="62">
+      <div class="lbl">Move speed <span class="val" id="vSpeed">9</span></div>
+      <input type="range" id="sSpeed" min="2" max="40" step="1" value="9">
       <div class="lbl">Jump to</div>
       <div class="row">
         <button data-view="out">Outside</button>
@@ -267,7 +311,7 @@
 </div>
 
 <div id="help" class="panel">
-  <b>Drag</b> look &middot; <b>click</b> select &middot; <b>WASD</b> move &middot; <b>Q/Z</b> up-down &middot; <b>scroll</b> speed
+  <b>Drag</b> look &middot; <b>click</b> select &middot; <b>WASD</b> move &middot; <b>Q/Z</b> up-down &middot; <b>scroll</b> speed &middot; <b>pinch</b> dolly
 </div>
 
 <div id="pad">
@@ -1101,6 +1145,7 @@
     if(d.kind==='panel' && vol[keyOf(d.i,d.j)]) sel.kind='vol';
     shapeSel={mode:'face', i:d.i, j:d.j, face:(d.face==null?null:d.face)};
     resolveShapeSel(); renderShapeList(); applySelection();
+    closeDrawerOnNarrow();
   }
 
   // ---------- global controls ----------
@@ -1193,6 +1238,16 @@
     back:[new THREE.Vector3(-4,8,-18),-0.32,-0.18]
   };
   var yaw=0.58, pitch=-0.20, speed=9, pos=new THREE.Vector3(14,9,16);
+
+  var spEl=document.getElementById('sSpeed'), spVal=document.getElementById('vSpeed');
+  function setSpeed(v){
+    speed=Math.max(2,Math.min(40,v));
+    spEl.value=Math.round(speed);
+    spVal.textContent=Math.round(speed);
+  }
+  spEl.oninput=function(){ setSpeed(parseFloat(spEl.value)); };
+  setSpeed(speed);
+
   [].forEach.call(document.querySelectorAll('[data-view]'),function(bt){
     bt.onclick=function(){ var v=views[bt.dataset.view]; pos.copy(v[0]); yaw=v[1]; pitch=v[2]; };
   });
@@ -1205,15 +1260,40 @@
   });
   addEventListener('keyup',function(e){ keys[e.key.toLowerCase()]=false; });
 
-  var drag=false, moved=0, lx=0, ly=0, cv=renderer.domElement;
+  var cv=renderer.domElement;
+  var pts={}, nPts=0, drag=false, moved=0, lx=0, ly=0, pinchD=0;
+
+  function fwdVec(){
+    return new THREE.Vector3(-Math.sin(yaw)*Math.cos(pitch),
+                              Math.sin(pitch),
+                             -Math.cos(yaw)*Math.cos(pitch));
+  }
+  function dolly(units){ pos.addScaledVector(fwdVec(), units); }
+
+  function pinchDist(){
+    var a=[]; for(var id in pts) a.push(pts[id]);
+    if(a.length<2) return 0;
+    var dx=a[0].x-a[1].x, dy=a[0].y-a[1].y;
+    return Math.sqrt(dx*dx+dy*dy);
+  }
+
   cv.addEventListener('pointerdown',function(e){
-    drag=true; moved=0; lx=e.clientX; ly=e.clientY; cv.setPointerCapture(e.pointerId);
+    if(!pts[e.pointerId]) nPts++;
+    pts[e.pointerId]={x:e.clientX,y:e.clientY};
+    cv.setPointerCapture(e.pointerId);
+    if(nPts===1){ drag=true; moved=0; lx=e.clientX; ly=e.clientY; }
+    else { drag=false; pinchD=pinchDist(); }   // a second finger cancels look-around
   });
-  cv.addEventListener('pointerup',function(e){
-    drag=false;
-    if(moved<6) pick(e);        // a click, not a look-around drag
-  });
+
   cv.addEventListener('pointermove',function(e){
+    if(!pts[e.pointerId]) return;
+    pts[e.pointerId].x=e.clientX; pts[e.pointerId].y=e.clientY;
+    if(nPts>=2){                                // two fingers: pinch to move in/out
+      var d=pinchDist();
+      if(pinchD>0 && d>0){ dolly((d-pinchD)*0.035); moved+=Math.abs(d-pinchD); }
+      pinchD=d;
+      return;
+    }
     if(!drag) return;
     var dx=e.clientX-lx, dy=e.clientY-ly;
     moved+=Math.abs(dx)+Math.abs(dy);
@@ -1221,9 +1301,38 @@
     pitch=Math.max(-1.5,Math.min(1.5,pitch));
     lx=e.clientX; ly=e.clientY;
   });
+
+  function endPointer(e){
+    if(!pts[e.pointerId]) return;
+    delete pts[e.pointerId]; nPts=Math.max(0,nPts-1);
+    if(nPts===0){
+      if(drag && moved<10) pick(e);   // a tap, not a look-around drag
+      drag=false; pinchD=0;
+    } else { pinchD=pinchDist(); }
+  }
+  cv.addEventListener('pointerup',endPointer);
+  cv.addEventListener('pointercancel',endPointer);
+
   cv.addEventListener('wheel',function(e){
-    e.preventDefault(); speed=Math.max(2,Math.min(40,speed*(e.deltaY>0?1.12:0.89)));
+    e.preventDefault(); setSpeed(speed*(e.deltaY>0?1.12:0.89));
   },{passive:false});
+
+  // No hardware keyboard means WASD/QZ are unavailable, so reveal the move pad.
+  var coarse = (matchMedia('(pointer:coarse)').matches || 'ontouchstart' in window);
+  if(coarse) document.documentElement.classList.add('touch');
+
+  var uiToggle=document.getElementById('uiToggle');
+  uiToggle.onclick=function(){
+    var open=document.body.classList.toggle('ui-open');
+    uiToggle.classList.toggle('on',open);
+    uiToggle.setAttribute('aria-expanded',open?'true':'false');
+    uiToggle.textContent=open?'Close':'Controls';
+  };
+  // Tapping a panel in the model opens the selection sheet; on a phone the
+  // controls drawer would sit on top of it, so close the drawer first.
+  function closeDrawerOnNarrow(){
+    if(innerWidth<=900 && document.body.classList.contains('ui-open')) uiToggle.onclick();
+  }
 
   var pad={};
   [].forEach.call(document.querySelectorAll('#pad button'),function(bt){
@@ -1262,11 +1371,19 @@
     renderer.render(scene,camera);
     requestAnimationFrame(tick);
   }
+  var stageEl=document.getElementById('stage');
   function resize(){
-    renderer.setSize(innerWidth,innerHeight);
-    camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix();
+    // Measure the container, not innerWidth: on mobile the layout viewport and
+    // the visual viewport disagree, which otherwise leaves the canvas oversized.
+    var w=stageEl.clientWidth||innerWidth, h=stageEl.clientHeight||innerHeight;
+    renderer.setSize(w,h,false);
+    renderer.domElement.style.width='100%';
+    renderer.domElement.style.height='100%';
+    camera.aspect=w/h; camera.updateProjectionMatrix();
   }
   addEventListener('resize',resize);
+  addEventListener('orientationchange',function(){ setTimeout(resize,120); });
+  if(window.visualViewport) visualViewport.addEventListener('resize',resize);
   resize(); clearState(); rebuild();
   loadFromAddress();
   tick();
