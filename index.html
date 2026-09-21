@@ -248,6 +248,7 @@
         <button id="tFig" class="on">6&#39; figure</button>
         <button id="tWalls" class="on">Room</button>
         <button id="tLamp" class="on">Headlamp</button>
+        <button id="tLook" class="on" title="Shadows, tone mapping and solid framing. Turn off on slow devices.">Render look</button>
       </div>
     </div>
   </div>
@@ -363,16 +364,29 @@
   var camera = new THREE.PerspectiveCamera(62,1,0.05,600);
   var renderer = new THREE.WebGLRenderer({antialias:true});
   renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+  // Render look: shadows, filmic tone mapping and proper sRGB output, so the live
+  // view reads like the offline Blender renders instead of flat and washed out.
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.05;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  // colours are authored in sRGB; convert so they survive the sRGB output intact
+  function lin(c){ c.convertSRGBToLinear(); return c; }
   document.getElementById('stage').appendChild(renderer.domElement);
 
-  scene.add(new THREE.HemisphereLight(0xffffff,0x54503f,dark?0.6:0.9));
+  var hemi=new THREE.HemisphereLight(0xffffff,0x54503f,dark?0.6:0.9); scene.add(hemi);
   var key=new THREE.DirectionalLight(0xffffff,dark?0.8:0.95); key.position.set(16,24,14); scene.add(key);
+  key.shadow.mapSize.set(2048,2048);
+  (function(c){ c.left=-15; c.right=15; c.top=15; c.bottom=-15; c.near=1; c.far=70; })(key.shadow.camera);
+  key.shadow.bias=-0.0009; key.shadow.normalBias=0.09; key.shadow.radius=3;
+  var caveFill=new THREE.PointLight(0xfff3e4,0.0,13,2.0); caveFill.position.set(0,3.2,-4.5); scene.add(caveFill);
   var fillL=new THREE.DirectionalLight(0xffffff,0.3); fillL.position.set(-14,9,-18); scene.add(fillL);
   var lamp=new THREE.PointLight(0xfff2e0,0.9,36,2.0); scene.add(lamp);
 
   var floor=new THREE.Mesh(new THREE.PlaneGeometry(RX,RY),
     new THREE.MeshStandardMaterial({color:dark?0x2b2d2f:0xd9d5ce,roughness:0.95}));
-  floor.rotation.x=-Math.PI/2; scene.add(floor);
+  floor.rotation.x=-Math.PI/2; floor.receiveShadow=true; scene.add(floor);
   var grid=new THREE.GridHelper(RX,20,dark?0x4a4d50:0xa9a59d,dark?0x34373a:0xc3bfb7);
   grid.position.y=0.01; scene.add(grid);
 
@@ -391,10 +405,12 @@
   edges.position.y=RZ/2; scene.add(edges);
 
   var figMat=new THREE.MeshStandardMaterial({color:0xc4462a,roughness:0.6});
+  lin(figMat.color);
   var fig=new THREE.Group();
   var bod=new THREE.Mesh(new THREE.CylinderGeometry(0.6,0.6,4.6,16),figMat); bod.position.y=2.3; fig.add(bod);
   var hd=new THREE.Mesh(new THREE.SphereGeometry(0.52,20,14),figMat); hd.position.y=5.2; fig.add(hd);
   fig.position.set(0,0,-5.5); scene.add(fig);
+  fig.traverse(function(o){ o.castShadow=true; o.receiveShadow=true; });
 
   // ---------- parameters ----------
   var P={hole:4, ceil:8, na:10, nb:6, den:0.35, ht:2, base:0.70, trunc:0.40, sym:0, seed:7,
@@ -638,6 +654,7 @@
   var matShape=new THREE.MeshStandardMaterial({color:0x2fa855,roughness:0.6,side:THREE.DoubleSide,
                                                flatShading:true,emissive:0x0f3d1e});
   var matHold =new THREE.MeshStandardMaterial({color:0x1f6fb2,roughness:0.55,flatShading:true});
+  [matBad,matHi,matShape].forEach(function(m){ lin(m.color); if(m.emissive) lin(m.emissive); });
   var panelGroup=new THREE.Group(), volGroup=new THREE.Group();
   scene.add(panelGroup); scene.add(volGroup);
   var holdMesh=new THREE.Mesh(new THREE.BufferGeometry(), matHold);
@@ -645,10 +662,88 @@
   var seams=new THREE.LineSegments(new THREE.BufferGeometry(),
     new THREE.LineBasicMaterial({color:dark?0x24262a:0x3a3733}));
   var volSeams=new THREE.LineSegments(new THREE.BufferGeometry(),
-    new THREE.LineBasicMaterial({color:0x2e2a24}));
+    new THREE.LineBasicMaterial({color:lin(new THREE.Color(0x2e2a24))}));
   var frame=new THREE.LineSegments(new THREE.BufferGeometry(),
     new THREE.LineBasicMaterial({color:0x9a7038}));
   scene.add(seams); scene.add(volSeams); scene.add(frame);
+
+  // ---------- render look ----------
+  // Solid tubes for framing and seams (WebGL lines are always 1px), shared colours
+  // with the line versions so the colour pickers keep working.
+  function tubeMat(lineObj,rough){
+    var m=new THREE.MeshStandardMaterial({roughness:rough});
+    m.color=lineObj.material.color;            // same Color object: pickers drive both
+    return m;
+  }
+  var frameTube=new THREE.Mesh(new THREE.BufferGeometry(), tubeMat(frame,0.7));
+  var seamTube =new THREE.Mesh(new THREE.BufferGeometry(), tubeMat(seams,0.6));
+  var vseamTube=new THREE.Mesh(new THREE.BufferGeometry(), tubeMat(volSeams,0.6));
+  [frameTube,seamTube,vseamTube].forEach(function(t){ t.castShadow=true; t.receiveShadow=true; scene.add(t); });
+
+  function segTubes(arr, r, sides){
+    var P3=[], tmp=new THREE.Vector3(), up=new THREE.Vector3(0,1,0), side=new THREE.Vector3(0,0,1);
+    for(var i=0;i<arr.length;i+=6){
+      var a=new THREE.Vector3(arr[i],arr[i+1],arr[i+2]), b=new THREE.Vector3(arr[i+3],arr[i+4],arr[i+5]);
+      var d=new THREE.Vector3().subVectors(b,a); if(d.lengthSq()<1e-10) continue; d.normalize();
+      var ref=Math.abs(d.y)<0.9?up:side;
+      var p=new THREE.Vector3().crossVectors(d,ref).normalize();
+      var q=new THREE.Vector3().crossVectors(d,p).normalize();
+      var ring=[];
+      for(var k=0;k<sides;k++){
+        var t=k/sides*Math.PI*2;
+        ring.push(p.clone().multiplyScalar(Math.cos(t)*r).add(q.clone().multiplyScalar(Math.sin(t)*r)));
+      }
+      for(var k2=0;k2<sides;k2++){
+        var o0=ring[k2], o1=ring[(k2+1)%sides];
+        var a0=a.clone().add(o0), a1=a.clone().add(o1), b0=b.clone().add(o0), b1=b.clone().add(o1);
+        P3.push(a0.x,a0.y,a0.z, b0.x,b0.y,b0.z, b1.x,b1.y,b1.z,
+                a0.x,a0.y,a0.z, b1.x,b1.y,b1.z, a1.x,a1.y,a1.z);
+      }
+    }
+    var g=new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(P3,3));
+    g.computeVertexNormals();
+    return g;
+  }
+  var renderLook=true;
+  function afterBuild(){
+    // shadows on everything built this pass
+    panelGroup.children.forEach(function(m){ m.castShadow=true; m.receiveShadow=true; });
+    volGroup.children.forEach(function(m){ m.castShadow=true; m.receiveShadow=true; });
+    holdMesh.castShadow=true; holdMesh.receiveShadow=true;
+    var src=[[frame,frameTube,0.07,6],[seams,seamTube,0.02,5],[volSeams,vseamTube,0.016,5]];
+    src.forEach(function(s2){
+      var pos=s2[0].geometry.getAttribute('position');
+      s2[1].geometry.dispose();
+      s2[1].geometry = pos ? segTubes(pos.array, s2[2], s2[3]) : new THREE.BufferGeometry();
+    });
+    applyLook();
+  }
+  function applyLook(){
+    renderer.shadowMap.enabled=renderLook;
+    key.castShadow=renderLook;
+    caveFill.intensity = renderLook ? 0.55 : 0.0;
+    hemi.intensity = renderLook ? (dark?0.45:0.62) : (dark?0.6:0.9);
+    // tubes replace lines in render look, but only where that layer is switched on
+    frameTube.visible = renderLook && frame.userData.want!==false;
+    seamTube.visible  = renderLook && seams.userData.want!==false;
+    vseamTube.visible = renderLook && volSeams.userData.want!==false;
+    // dollhouse room: each wall faces inward and is drawn one-sided and solid, so the
+    // walls between you and the cave vanish and the ones behind it stay, from any angle
+    var roomOn = walls.userData.want!==false;
+    walls.visible = roomOn;
+    edges.visible = roomOn && !renderLook;
+    wallMat.side = renderLook ? THREE.FrontSide : THREE.DoubleSide;
+    wallMat.transparent = !renderLook;
+    wallMat.opacity = renderLook ? 1.0 : 0.40;
+    walls.children.forEach(function(w){ w.receiveShadow = renderLook; });
+    frame.visible  = !renderLook && frame.userData.want!==false;
+    seams.visible  = !renderLook && seams.userData.want!==false;
+    volSeams.visible = !renderLook && volSeams.userData.want!==false;
+    [matPanel,matBad,matVol,matHi,matShape,matHold,figMat,wallMat,floor.material].forEach(function(m){
+      m.needsUpdate=true;
+    });
+  }
 
   // ---------- per-volume state ----------
   // key "i_j" -> {h, bs, chop, su, sw, rot, sym, custom} | null (explicitly empty)
@@ -892,6 +987,7 @@
       obj.geometry.dispose(); obj.geometry=g2;
     }
     setLines(seams,seamPts); setLines(volSeams,volEdge); setLines(frame,framePts);
+    if(typeof afterBuild==='function') afterBuild();
     var hg=new THREE.BufferGeometry();
     hg.setAttribute('position', new THREE.Float32BufferAttribute(holdTris,3));
     hg.computeVertexNormals();
@@ -1512,16 +1608,17 @@
     el.onclick=function(){ set(!on); };
     toggles[id]={get:function(){ return on; }, set:set};
   }
-  toggle('tVols',function(v){ volGroup.visible=v; volSeams.visible=v; },true);
+  toggle('tVols',function(v){ volGroup.visible=v; volSeams.userData.want=v; applyLook(); },true);
   toggle('tHolds',function(v){ holdMesh.visible=v; },true);
   toggle('tWire',function(v){
     [matPanel,matBad,matVol,matHi,matHold].forEach(function(m){ m.wireframe=v; m.needsUpdate=true; });
   },false);
-  toggle('tSeams',function(v){ seams.visible=v; },true);
-  toggle('tFrame',function(v){ frame.visible=v; },true);
+  toggle('tSeams',function(v){ seams.userData.want=v; applyLook(); },true);
+  toggle('tFrame',function(v){ frame.userData.want=v; applyLook(); },true);
   toggle('tFig',function(v){ fig.visible=v; },true);
-  toggle('tWalls',function(v){ walls.visible=v; edges.visible=v; },true);
+  toggle('tWalls',function(v){ walls.userData.want=v; applyLook(); },true);
   toggle('tLamp',function(v){ lamp.visible=v; },true);
+  toggle('tLook',function(v){ renderLook=v; applyLook(); },true);
 
   // +1 drags the model with the pointer (the model goes the way you drag);
   // -1 drags the camera instead, which makes the model go the opposite way.
@@ -1536,14 +1633,14 @@
            cBg:dark?0x141516:0xeceae6};
   function hex(n){ var s='000000'+n.toString(16); return '#'+s.slice(-6); }
   var APPLY={
-    cPanel:function(v){ matPanel.color.set(v); },
-    cVol:  function(v){ matVol.color.set(v); },
-    cHold: function(v){ matHold.color.set(v); },
-    cSeam: function(v){ seams.material.color.set(v); },
-    cFrame:function(v){ frame.material.color.set(v); },
-    cFig:  function(v){ figMat.color.set(v); },
-    cFloor:function(v){ floor.material.color.set(v); },
-    cWall: function(v){ wallMat.color.set(v); },
+    cPanel:function(v){ lin(matPanel.color.set(v)); },
+    cVol:  function(v){ lin(matVol.color.set(v)); },
+    cHold: function(v){ lin(matHold.color.set(v)); },
+    cSeam: function(v){ lin(seams.material.color.set(v)); },
+    cFrame:function(v){ lin(frame.material.color.set(v)); },
+    cFig:  function(v){ lin(figMat.color.set(v)); },
+    cFloor:function(v){ lin(floor.material.color.set(v)); },
+    cWall: function(v){ lin(wallMat.color.set(v)); },
     cBg:   function(v){ scene.background.set(v); }
   };
   Object.keys(DEF).forEach(function(id){
@@ -1702,6 +1799,9 @@
     if(keys['z']||pad.d)v.y-=1;
     if(v.lengthSq()>0){ pos.addScaledVector(v.normalize(), speed*dt); markDirty(); }
     camera.position.copy(pos); lamp.position.copy(pos);
+    // cutaway: in render look the ceiling only appears when you are inside the room
+    if(typeof ceilM!=='undefined')
+      ceilM.visible = !renderLook || (Math.abs(pos.x)<RX/2 && Math.abs(pos.z)<RY/2 && pos.y<RZ);
     camera.lookAt(pos.clone().add(fwd));
     renderer.render(scene,camera);
     requestAnimationFrame(tick);
