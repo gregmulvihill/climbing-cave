@@ -76,6 +76,14 @@
     font-size:11px;font-variant-numeric:tabular-nums;text-align:right}
   .bd{padding-bottom:9px}
   .bd .lbl:first-child{margin-top:0}
+  table.vcat{width:100%;border-collapse:collapse;margin-top:4px;font-size:11.5px}
+  table.vcat th{font-weight:600;color:var(--muted);font-size:10px;text-transform:uppercase;
+    letter-spacing:.4px;padding:2px 3px;text-align:left}
+  table.vcat td{padding:2px 3px;border-top:1px solid var(--line)}
+  table.vcat input{width:48px;font:inherit;font-size:11.5px;color:var(--ink);
+    background:rgba(127,127,127,.10);border:1px solid var(--line);border-radius:6px;padding:2px 4px}
+  table.vcat .vtop{color:var(--muted);font-variant-numeric:tabular-nums}
+  .typebtns button{padding:5px 7px}
   .shapelist{max-height:190px;overflow:auto;margin-top:4px;
     border:1px solid var(--line);border-radius:8px}
   .shrow{display:flex;gap:8px;align-items:baseline;padding:5px 8px;cursor:pointer;
@@ -180,6 +188,19 @@
     <div class="bd">
       <div class="lbl">Hole diameter <span class="val" id="vHole">4.0 ft</span></div>
       <input type="range" id="sHole" min="0" max="16" step="0.5" value="4">
+      <div class="lbl">Arc sweep <span class="val" id="vSweep">&plusmn;90&deg;</span></div>
+      <input type="range" id="sSweep" min="20" max="180" step="5" value="90">
+      <div class="note" id="sweepNote">&plusmn;90&deg; is the half ring. At &plusmn;180&deg; it closes into a full ring with a door.</div>
+      <div id="doorOpts" style="display:none">
+        <div class="lbl">Door height <span class="val" id="vDoorH"></span></div>
+        <input type="range" id="sDoorH" min="0" max="6" step="1" value="2">
+        <div class="lbl">Door width <span class="val" id="vDoorW"></span></div>
+        <input type="range" id="sDoorW" min="1" max="4" step="1" value="1">
+        <div class="lbl">Door faces <span class="val" id="vDoorAz"></span></div>
+        <input type="range" id="sDoorAz" min="0" max="345" step="15" value="45">
+        <div class="note" id="doorNote"></div>
+      </div>
+      <div class="warn" id="fitWarn"></div>
       <div class="lbl">Ceiling at apex <span class="val" id="vCeil">8 ft</span></div>
       <input type="range" id="sCeil" min="4" max="12" step="0.25" value="8">
       <div class="lbl">Panels along the arc <span class="val" id="vNa">10</span></div>
@@ -211,14 +232,17 @@
     <div class="bd">
       <div class="lbl">Volume coverage <span class="val" id="vDen">35%</span></div>
       <input type="range" id="sDen" min="0" max="100" step="5" value="35">
-      <div class="lbl">Max volume height <span class="val" id="vHt">2 ft</span></div>
-      <input type="range" id="sHt" min="0.5" max="4" step="0.25" value="2">
-      <div class="lbl">Base size <span class="val" id="vBase">70%</span></div>
-      <input type="range" id="sBase" min="30" max="95" step="5" value="70">
-      <div class="lbl">Symmetry <span class="val" id="vSym">0%</span></div>
-      <input type="range" id="sSym" min="0" max="100" step="5" value="0">
-      <div class="lbl">Chopped tops <span class="val" id="vTrunc">40%</span></div>
+      <div class="lbl">Chopped share <span class="val" id="vTrunc">40%</span></div>
       <input type="range" id="sTrunc" min="0" max="100" step="10" value="40">
+      <div class="lbl">The four volume sizes <span class="val" style="color:var(--muted)">inches</span></div>
+      <table class="vcat" id="vcat">
+        <tr><th></th><th>Base</th><th>Height</th><th>Top</th></tr>
+        <tr><td>Pyramid L</td><td><input type="number" id="vt0b" min="6" max="40" step="1"></td><td><input type="number" id="vt0h" min="2" max="20" step="1"></td><td class="vtop">&mdash;</td></tr>
+        <tr><td>Pyramid S</td><td><input type="number" id="vt1b" min="6" max="40" step="1"></td><td><input type="number" id="vt1h" min="2" max="20" step="1"></td><td class="vtop">&mdash;</td></tr>
+        <tr><td>Chopped L</td><td><input type="number" id="vt2b" min="6" max="40" step="1"></td><td><input type="number" id="vt2h" min="2" max="20" step="1"></td><td class="vtop" id="vt2t"></td></tr>
+        <tr><td>Chopped S</td><td><input type="number" id="vt3b" min="6" max="40" step="1"></td><td><input type="number" id="vt3h" min="2" max="20" step="1"></td><td class="vtop" id="vt3t"></td></tr>
+      </table>
+      <div class="note">Square bases, tops centred: each size cuts from one side template (&times;4), plus a square top for chopped. Volumes never overhang their panel.</div>
       <div class="row" style="margin-top:8px">
         <button id="bShuffle">Reshuffle volumes</button>
         <button id="bClearEdits">Clear my edits</button>
@@ -239,7 +263,9 @@
   <div class="sec" id="secShow">
     <div class="hd"><span class="caret">&#9660;</span>Show<span class="sum" id="sumShow"></span></div>
     <div class="bd">
-      <div class="row">
+      <div class="lbl">Room opacity <span class="val" id="vRoomOp">12%</span></div>
+      <input type="range" id="sRoomOp" min="0" max="60" step="2" value="12">
+      <div class="row" style="margin-top:6px">
         <button id="tVols" class="on">Volumes</button>
         <button id="tHolds" class="on">Holds</button>
         <button id="tWire">Wireframe</button>
@@ -280,6 +306,20 @@
       <input type="range" id="sSpeed" min="2" max="40" step="1" value="9">
       <div class="lbl">Drag behaviour</div>
       <div class="row"><button id="tInvert" class="on">Model follows drag</button></div>
+      <div class="lbl">Figure height <span class="val" id="vFigH">6&#39; 0&#39;&#39;</span></div>
+      <input type="range" id="sFigH" min="60" max="72" step="1" value="72">
+      <div class="row" style="margin-top:6px">
+        <button id="tWalk" title="Walk at the figure's eye height. You cannot pass through walls or the cave. F toggles.">Walk as figure</button>
+      </div>
+      <div class="note" id="walkNote" style="display:none">Eye height <span id="vEye"></span>. WASD walks, drag looks. Roof and walls stop you where the figure would stop.</div>
+      <div class="lbl">Mouse drag <span class="val" style="color:var(--muted)">O toggles</span></div>
+      <div class="row" id="mouseMode">
+        <button data-mm="look" class="on">Look around</button>
+        <button data-mm="orbit">Orbit</button>
+      </div>
+      <div id="orbitOpts" style="display:none">
+        <div class="note">Click or tap any surface to orbit around it &mdash; the view turns to centre on it. Drag orbits, scroll zooms toward it, arrows and WASD move. Switch to Look to select and edit.</div>
+      </div>
       <div class="lbl">Jump to</div>
       <div class="row">
         <button data-view="out">Outside</button>
@@ -323,29 +363,29 @@
   <div id="selBody">
   <p class="sub" id="selSub"></p>
   <div id="selEdit" style="display:none">
-    <div class="lbl">Height <span class="val" id="vEh"></span></div>
-    <input type="range" id="eH" min="0.25" max="4" step="0.05">
-    <div class="lbl">Base size <span class="val" id="vEb"></span></div>
-    <input type="range" id="eB" min="25" max="98" step="1">
-    <div class="lbl">Symmetry <span class="val" id="vEs"></span></div>
-    <input type="range" id="eS" min="0" max="100" step="5">
+    <div class="lbl">Type</div>
+    <div class="row typebtns" id="eType">
+      <button data-t="0">Pyramid L</button><button data-t="1">Pyramid S</button>
+      <button data-t="2">Chopped L</button><button data-t="3">Chopped S</button>
+    </div>
     <div class="lbl">Rotation <span class="val" id="vEr"></span></div>
-    <input type="range" id="eR" min="0" max="90" step="1">
+    <input type="range" id="eR" min="0" max="89" step="1">
     <div class="row" style="margin-top:10px">
-      <button id="eChop">Chop top</button>
-      <button id="eRand">Randomize</button>
+      <button id="eMove">Move elsewhere on panel</button>
       <button id="eDel" class="danger">Delete</button>
     </div>
+    <div class="note" id="eMsg"></div>
   </div>
   <div id="selAdd" style="display:none">
     <div class="row"><button id="eAdd" class="primary">Add volume here</button></div>
+    <div class="note" id="aMsg">Adds one where you clicked, if it fits.</div>
   </div>
   <div class="row" style="margin-top:8px"><button id="eClose">Deselect</button></div>
   </div>
 </div>
 
 <div id="help" class="panel">
-  <b>Drag</b> look (direction set in View) &middot; <b>click</b> select &middot; <b>WASD</b> move &middot; <b>Q/Z</b> up-down &middot; <b>scroll</b> speed &middot; <b>pinch</b> dolly
+  <b>Drag</b> look (direction set in View) &middot; <b>click</b> select &middot; <b>WASD</b> move &middot; <b>Q/Z</b> up-down &middot; <b>scroll</b> zoom &middot; <b>pinch</b> zoom &middot; <b>O</b> orbit (click to centre) &middot; <b>F</b> walk
 </div>
 
 <div id="pad">
@@ -357,6 +397,12 @@
 (function(){
   "use strict";
   var RX=20, RY=20, RZ=12, SHEET_L=8.0, SHEET_W=4.0;
+  // The real room: 20ft wide (x) by 40ft long (z). The cave fills the back 20x20
+  // (z -10..10, centred on the origin); the open half is in front (z 10..30).
+  // Gable ceiling: 8ft at the side walls, 12ft at a ridge running the long way.
+  var ROOM_W=20, ROOM_Z0=-10, ROOM_Z1=30, WALL_H=8, RIDGE_H=12;
+  function ceilAt(x){ return RIDGE_H-(RIDGE_H-WALL_H)*Math.min(1,Math.abs(x)/(ROOM_W/2)); }
+  function inRoom(x,z,m){ m=m||0; return Math.abs(x)<ROOM_W/2-m && z>ROOM_Z0+m && z<ROOM_Z1-m; }
 
   var dark = matchMedia('(prefers-color-scheme: dark)').matches;
   var scene = new THREE.Scene();
@@ -384,25 +430,56 @@
   var fillL=new THREE.DirectionalLight(0xffffff,0.3); fillL.position.set(-14,9,-18); scene.add(fillL);
   var lamp=new THREE.PointLight(0xfff2e0,0.9,36,2.0); scene.add(lamp);
 
-  var floor=new THREE.Mesh(new THREE.PlaneGeometry(RX,RY),
+  var ROOM_L=ROOM_Z1-ROOM_Z0, ROOM_ZC=(ROOM_Z0+ROOM_Z1)/2, HW=ROOM_W/2;
+  var floor=new THREE.Mesh(new THREE.PlaneGeometry(ROOM_W,ROOM_L),
     new THREE.MeshStandardMaterial({color:dark?0x2b2d2f:0xd9d5ce,roughness:0.95}));
-  floor.rotation.x=-Math.PI/2; floor.receiveShadow=true; scene.add(floor);
-  var grid=new THREE.GridHelper(RX,20,dark?0x4a4d50:0xa9a59d,dark?0x34373a:0xc3bfb7);
-  grid.position.y=0.01; scene.add(grid);
+  floor.rotation.x=-Math.PI/2; floor.position.z=ROOM_ZC; floor.receiveShadow=true; scene.add(floor);
+  // one-foot floor grid over the whole room
+  var grid=(function(){
+    var P3=[];
+    for(var gx=-HW; gx<=HW+1e-6; gx++) P3.push(gx,0.01,ROOM_Z0, gx,0.01,ROOM_Z1);
+    for(var gz=ROOM_Z0; gz<=ROOM_Z1+1e-6; gz++) P3.push(-HW,0.01,gz, HW,0.01,gz);
+    var g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(P3,3));
+    return new THREE.LineSegments(g,new THREE.LineBasicMaterial({color:dark?0x3b3e41:0xbcb8b0,transparent:true,opacity:0.6}));
+  })();
+  scene.add(grid);
 
+  // Translucent room: you see where it is without it blocking the view.
+  var wallMat=new THREE.MeshStandardMaterial({color:dark?0x6a7078:0xb9c2cc,
+    roughness:0.9,transparent:true,opacity:0.12,side:THREE.DoubleSide,depthWrite:false});
   var walls=new THREE.Group();
-  var wallMat=new THREE.MeshStandardMaterial({color:dark?0x34373b:0xd0ccc5,
-    roughness:0.92,transparent:true,opacity:0.40,side:THREE.DoubleSide});
-  [[0,-RY/2,0],[0,RY/2,Math.PI],[-RX/2,0,Math.PI/2],[RX/2,0,-Math.PI/2]].forEach(function(w){
-    var m=new THREE.Mesh(new THREE.PlaneGeometry(RX,RZ),wallMat);
-    m.position.set(w[0],RZ/2,w[1]); m.rotation.y=w[2]; walls.add(m);
+  function quad(a,b,c,d){
+    var g=new THREE.BufferGeometry();
+    g.setAttribute('position',new THREE.Float32BufferAttribute([].concat(a,b,c, a,c,d),3));
+    g.computeVertexNormals(); return new THREE.Mesh(g,wallMat);
+  }
+  // long side walls, 8ft
+  walls.add(quad([-HW,0,ROOM_Z0],[-HW,0,ROOM_Z1],[-HW,WALL_H,ROOM_Z1],[-HW,WALL_H,ROOM_Z0]));
+  walls.add(quad([HW,0,ROOM_Z0],[HW,0,ROOM_Z1],[HW,WALL_H,ROOM_Z1],[HW,WALL_H,ROOM_Z0]));
+  // two sloping ceiling planes meeting at the ridge
+  walls.add(quad([-HW,WALL_H,ROOM_Z0],[-HW,WALL_H,ROOM_Z1],[0,RIDGE_H,ROOM_Z1],[0,RIDGE_H,ROOM_Z0]));
+  walls.add(quad([HW,WALL_H,ROOM_Z0],[0,RIDGE_H,ROOM_Z0],[0,RIDGE_H,ROOM_Z1],[HW,WALL_H,ROOM_Z1]));
+  // gable end walls (pentagons)
+  [ROOM_Z0,ROOM_Z1].forEach(function(z){
+    var sh=new THREE.Shape();
+    sh.moveTo(-HW,0); sh.lineTo(HW,0); sh.lineTo(HW,WALL_H); sh.lineTo(0,RIDGE_H); sh.lineTo(-HW,WALL_H); sh.lineTo(-HW,0);
+    var m=new THREE.Mesh(new THREE.ShapeGeometry(sh),wallMat); m.position.z=z; walls.add(m);
   });
-  var ceilM=new THREE.Mesh(new THREE.PlaneGeometry(RX,RY),wallMat);
-  ceilM.rotation.x=Math.PI/2; ceilM.position.y=RZ; walls.add(ceilM);
+  walls.renderOrder=2;
   scene.add(walls);
-  var edges=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(RX,RZ,RY)),
-    new THREE.LineBasicMaterial({color:dark?0x7d8288:0x8c8880}));
-  edges.position.y=RZ/2; scene.add(edges);
+  // outline of every room edge, so it reads clearly even at low opacity
+  var edges=(function(){
+    var E=[], zs=[ROOM_Z0,ROOM_Z1];
+    zs.forEach(function(z){
+      E.push(-HW,0,z, HW,0,z,  HW,0,z, HW,WALL_H,z,  HW,WALL_H,z, 0,RIDGE_H,z,
+             0,RIDGE_H,z, -HW,WALL_H,z,  -HW,WALL_H,z, -HW,0,z);
+    });
+    [-HW,HW].forEach(function(x){ E.push(x,0,ROOM_Z0, x,0,ROOM_Z1,  x,WALL_H,ROOM_Z0, x,WALL_H,ROOM_Z1); });
+    E.push(0,RIDGE_H,ROOM_Z0, 0,RIDGE_H,ROOM_Z1);
+    var g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(E,3));
+    return new THREE.LineSegments(g,new THREE.LineBasicMaterial({color:dark?0x8a9099:0x7d8690,transparent:true,opacity:0.85}));
+  })();
+  scene.add(edges);
 
   var figMat=new THREE.MeshStandardMaterial({color:0xc4462a,roughness:0.6});
   lin(figMat.color);
@@ -410,11 +487,54 @@
   var bod=new THREE.Mesh(new THREE.CylinderGeometry(0.6,0.6,4.6,16),figMat); bod.position.y=2.3; fig.add(bod);
   var hd=new THREE.Mesh(new THREE.SphereGeometry(0.52,20,14),figMat); hd.position.y=5.2; fig.add(hd);
   fig.position.set(0,0,-5.5); scene.add(fig);
+  // The figure is modelled 5.72 ft tall; scale it so the top of the head is exactly FIG_H.
+  var FIG_MODEL_H=5.72, FIG_H=6.0;
+  function figScale(){ return FIG_H/FIG_MODEL_H; }
+  function applyFigHeight(){ fig.scale.setScalar(figScale()); }
+  applyFigHeight();
   fig.traverse(function(o){ o.castShadow=true; o.receiveShadow=true; });
 
   // ---------- parameters ----------
   var P={hole:4, ceil:8, na:10, nb:6, den:0.35, ht:2, base:0.70, trunc:0.40, sym:0, seed:7,
-         hold:0, hseed:11, prof:null};
+         hold:0, hseed:11, prof:null, sweep:90, naPer:10, doorH:2, doorW:1, doorAz:45,
+         // the four volume sizes, feet: [square base side, height]. Chopped tops are
+         // the pyramid cut at half its height, so the top side is half the base.
+         vt:[[2.0,10/12],[14/12,7/12],[2.0,7/12],[14/12,5/12]]};
+  var VT_NAMES=['Pyramid L','Pyramid S','Chopped L','Chopped S'];
+  // How far round the ring goes, either side of straight back. At +-180 it closes into
+  // a full ring, and you get in through a door cut in the outer wall instead.
+  function sweepHalf(){ return Math.min(P.sweep, 180)*Math.PI/180; }
+  function isClosed(){ return P.sweep>=180; }
+
+  // ---------- door (closed ring only) ----------
+  // Panels removed from the floor up on the outer wall. Door faces an angle measured
+  // from the front of the room toward the right: 45 = front-right corner.
+  var doorCols={};
+  function doorHmax(){ return Math.max(1, Math.floor(P.nb/2)); }   // keep the overhead intact
+  function doorH(){ return isClosed() ? Math.min(P.doorH, doorHmax()) : 0; }
+  function computeDoor(){
+    doorCols={};
+    if(!isClosed() || doorH()<1) return;
+    var th=P.doorAz*Math.PI/180 - Math.PI/2, th0=thAt(0), TWO=2*Math.PI;
+    var x=(((th-th0)%TWO)+TWO)%TWO/TWO*P.na, w=Math.max(1,Math.min(P.doorW, P.na-1)), first;
+    if(w%2) first=Math.floor(x)-(w-1)/2;            // odd: a panel centred on the direction
+    else    first=Math.round(x)-w/2;                // even: a seam centred on it
+    for(var k=0;k<w;k++) doorCols[((first+k)%P.na+P.na)%P.na]=true;
+  }
+  function isDoor(i,j){ return !!doorCols[((i%P.na)+P.na)%P.na] && j<doorH(); }
+  // angle of a point along the ring, x in panel units (0..na); centred on straight back
+  function thAt(x){ var A=sweepHalf(); return Math.PI/2 - A + (x/P.na)*2*A; }
+  // Panels along the arc are set per 180 deg, so panels keep their size as the arc
+  // grows or shrinks. At the default half ring the two are the same number.
+  function effNa(){ return Math.max(2, Math.round(P.naPer*(2*sweepHalf()*180/Math.PI)/180)); }
+  // a different count renumbers every panel, so hand-placed volumes can't carry over
+  function syncNa(){
+    var n=effNa();
+    if(n!==P.na){ P.na=n; if(typeof clearState==='function'){ sel=null; clearState(); } }
+    var el=document.getElementById('vNa');
+    if(el) el.textContent = P.naPer + (P.na!==P.naPer ? ' per 180\u00b0 \u00b7 '+P.na+' total' : '');
+  }
+  function isChop(t){ return t>=2; }
   function mkRng(seed){ var x=seed>>>0;
     return function(){ x=(x*1664525+1013904223)>>>0; return x/4294967296; }; }
   function ringR(){ return 5+P.hole/4; }
@@ -654,6 +774,8 @@
   var matShape=new THREE.MeshStandardMaterial({color:0x2fa855,roughness:0.6,side:THREE.DoubleSide,
                                                flatShading:true,emissive:0x0f3d1e});
   var matHold =new THREE.MeshStandardMaterial({color:0x1f6fb2,roughness:0.55,flatShading:true});
+  // panels that, with their framing, run into the ceiling
+  var matCeil =new THREE.MeshStandardMaterial({color:0xd9861f,roughness:0.8,side:THREE.DoubleSide,flatShading:true});
   [matBad,matHi,matShape].forEach(function(m){ lin(m.color); if(m.emissive) lin(m.emissive); });
   var panelGroup=new THREE.Group(), volGroup=new THREE.Group();
   scene.add(panelGroup); scene.add(volGroup);
@@ -705,8 +827,11 @@
     g.computeVertexNormals();
     return g;
   }
-  var renderLook=true;
+  var renderLook=true, roomOpacity=0.12;
   function afterBuild(){
+    if(typeof walking!=='undefined' && walking && !isFree(pos.x,pos.z)){
+      var sp=findFreeNear(pos.x,pos.z); if(sp){ pos.x=sp.x; pos.z=sp.z; }
+    }
     // shadows on everything built this pass
     panelGroup.children.forEach(function(m){ m.castShadow=true; m.receiveShadow=true; });
     volGroup.children.forEach(function(m){ m.castShadow=true; m.receiveShadow=true; });
@@ -732,11 +857,11 @@
     // walls between you and the cave vanish and the ones behind it stay, from any angle
     var roomOn = walls.userData.want!==false;
     walls.visible = roomOn;
-    edges.visible = roomOn && !renderLook;
-    wallMat.side = renderLook ? THREE.FrontSide : THREE.DoubleSide;
-    wallMat.transparent = !renderLook;
-    wallMat.opacity = renderLook ? 1.0 : 0.40;
-    walls.children.forEach(function(w){ w.receiveShadow = renderLook; });
+    // the room is always see-through, with its edges drawn so you can place it
+    edges.visible = roomOn;
+    wallMat.side = THREE.DoubleSide;
+    wallMat.transparent = true;
+    wallMat.opacity = roomOpacity;
     frame.visible  = !renderLook && frame.userData.want!==false;
     seams.visible  = !renderLook && seams.userData.want!==false;
     volSeams.visible = !renderLook && volSeams.userData.want!==false;
@@ -746,29 +871,125 @@
   }
 
   // ---------- per-volume state ----------
-  // key "i_j" -> {h, bs, chop, su, sw, rot, sym, custom} | null (explicitly empty)
-  var vol={};
+  // Each volume: {id, i, j, t:type 0-3, cu, cw:centre in the panel's own plane (ft),
+  // rot:degrees}. Placement is recomputed on every rebuild so volumes always fit the
+  // current panels. Your edits (vEdits) and deletions (vDel) are kept by id.
+  var vols=[], vEdits={}, vDel={}, addN=0, volMisfits=0;
   function keyOf(i,j){ return i+'_'+j; }
-  function defaults(rnd){
-    return {h:P.ht*(0.35+0.65*rnd()), bs:P.base*(0.75+0.5*rnd()), chop:rnd()<P.trunc,
-            su:(rnd()-0.5)*0.35, sw:(rnd()-0.5)*0.35, rot:0, sym:P.sym, custom:false};
+  function regen(){ }                                   // placement happens in rebuild
+  function clearState(){ vEdits={}; vDel={}; addN=0; }
+  var VOL_MARGIN=0.10, VOL_GAP=0.08;                    // 1.2in inside panel edges, 1in apart
+
+  // the panel as a flat outline in its own plane, wound counter-clockwise
+  function panelOutline(i,j){
+    var q=panelQuad(i,j), F=localFrame(i,j,q);
+    var pts=q.map(function(p){ var d=new THREE.Vector3().subVectors(p,F.c); return [d.dot(F.u), d.dot(F.w)]; });
+    var ar=0; for(var k=0;k<4;k++){ var p1=pts[k], p2=pts[(k+1)%4]; ar+=p1[0]*p2[1]-p2[0]*p1[1]; }
+    if(ar<0) pts.reverse();
+    return {pts:pts, F:F, area:Math.abs(ar)/2};
   }
-  function regen(keepCustom){
-    var rnd=mkRng(P.seed*7919+P.na*131+P.nb*17);
+  function squareCorners(cu,cw,side,rotDeg){
+    var h=side/2, r=rotDeg*Math.PI/180, c=Math.cos(r), s2=Math.sin(r);
+    return [[-h,-h],[h,-h],[h,h],[-h,h]].map(function(p){
+      return [cu+p[0]*c-p[1]*s2, cw+p[0]*s2+p[1]*c];
+    });
+  }
+  // every corner at least VOL_MARGIN inside every edge of the (convex) panel outline
+  function insideOutline(corners, outline){
+    var o=outline.pts;
+    for(var e=0;e<o.length;e++){
+      var a1=o[e], a2=o[(e+1)%o.length];
+      var ex=a2[0]-a1[0], ey=a2[1]-a1[1], L=Math.sqrt(ex*ex+ey*ey); if(L<1e-9) continue;
+      for(var k=0;k<corners.length;k++){
+        var d=(ex*(corners[k][1]-a1[1]) - ey*(corners[k][0]-a1[0]))/L;   // left of edge = inside
+        if(d<VOL_MARGIN) return false;
+      }
+    }
+    return true;
+  }
+  // separating-axis test for two squares, with a minimum gap between them
+  function squaresClear(A,B){
+    var polys=[A,B];
+    for(var pi=0;pi<2;pi++){
+      var P2=polys[pi];
+      for(var e=0;e<2;e++){
+        var ax=P2[e+1][0]-P2[e][0], ay=P2[e+1][1]-P2[e][1], L=Math.sqrt(ax*ax+ay*ay);
+        ax/=L; ay/=L;
+        var aMin=1e9,aMax=-1e9,bMin=1e9,bMax=-1e9;
+        A.forEach(function(p){ var d=p[0]*ax+p[1]*ay; if(d<aMin)aMin=d; if(d>aMax)aMax=d; });
+        B.forEach(function(p){ var d=p[0]*ax+p[1]*ay; if(d<bMin)bMin=d; if(d>bMax)bMax=d; });
+        if(aMax+VOL_GAP<=bMin || bMax+VOL_GAP<=aMin) return true;
+      }
+    }
+    return false;
+  }
+  function volFits(v, outline, others){
+    var sq=squareCorners(v.cu,v.cw,P.vt[v.t][0],v.rot);
+    if(!insideOutline(sq,outline)) return false;
+    for(var k=0;k<others.length;k++){
+      var o=others[k];
+      if(!squaresClear(sq, squareCorners(o.cu,o.cw,P.vt[o.t][0],o.rot))) return false;
+    }
+    return true;
+  }
+  // try to place a volume of type t near (cu,cw) on a panel; returns a volume or null
+  function placeNear(t, cu, cw, outline, others, rnd, tries){
+    var bb=outline.pts.reduce(function(m,p){ return [Math.min(m[0],p[0]),Math.max(m[1],p[0]),
+                                                     Math.min(m[2],p[1]),Math.max(m[3],p[1])]; },[1e9,-1e9,1e9,-1e9]);
+    var mu=(bb[0]+bb[1])/2, mw=(bb[2]+bb[3])/2;
+    for(var k=0;k<tries;k++){
+      // blend a uniform draw with the panel middle: large sizes only fit near the middle,
+      // so this finds them without clustering small ones there
+      var pull = cu==null ? Math.min(0.85, k/tries*1.2) : 0;
+      var ru=bb[0]+rnd()*(bb[1]-bb[0]), rw=bb[2]+rnd()*(bb[3]-bb[2]);
+      var v={t:t, rot:rnd()*90,
+             cu: cu==null ? ru+(mu-ru)*pull : cu + (k? (rnd()-0.5)*0.12*k : 0),
+             cw: cw==null ? rw+(mw-rw)*pull : cw + (k? (rnd()-0.5)*0.12*k : 0)};
+      if(volFits(v,outline,others)) return v;
+    }
+    return null;
+  }
+  function placeVolumes(){
+    vols=[]; volMisfits=0;
     for(var i=0;i<P.na;i++){
       for(var j=0;j<P.nb;j++){
-        var k=keyOf(i,j);
-        var exists=rnd()<=P.den;
-        var d=defaults(rnd);               // drawn either way, so the sequence is stable
-        if(keepCustom && vol[k] && vol[k].custom) continue;
-        if(keepCustom && vol[k]===null && volDeleted[k]) continue;
-        vol[k]= exists ? d : null;
+        if(isDoor(i,j)) continue;
+        var outline=panelOutline(i,j), gen=[], mine=[];
+        // 1. the generated set, from the seed alone
+        var rnd=mkRng((P.seed*7919+i*131+j*17+P.na*3+P.nb*5)>>>0);
+        rnd(); rnd(); rnd();                      // settle the generator before use
+        var want=P.den*outline.area/4;            // 100% is about one per 4 sq ft
+        var n=Math.floor(want)+(rnd()<(want%1)?1:0);
+        for(var k=0;k<n;k++){
+          var chop=rnd()<P.trunc, big=rnd()<0.5;
+          var order= chop ? (big?[2,3]:[3,2]) : (big?[0,1]:[1,0]);
+          var v=null;
+          for(var oi=0; oi<2 && !v; oi++) v=placeNear(order[oi], null, null, outline, gen, rnd, oi?60:120);
+          if(!v) continue;
+          v.id='g:'+i+'_'+j+'_'+k; v.i=i; v.j=j; v.custom=false;
+          gen.push(v);
+        }
+        // 2. yours: edited copies of generated ones, and ones you added
+        Object.keys(vEdits).forEach(function(id){
+          var e=vEdits[id];
+          if(e.i!==i || e.j!==j) return;
+          var v={id:id, i:i, j:j, t:e.t, cu:e.cu, cw:e.cw, rot:e.rot, custom:true};
+          if(volFits(v,outline,mine)) mine.push(v); else volMisfits++;
+        });
+        // 3. generated ones survive unless deleted, replaced by your edit, or in your way
+        gen.forEach(function(g){
+          if(vDel[g.id] || vEdits[g.id]) return;
+          var sq=squareCorners(g.cu,g.cw,P.vt[g.t][0],g.rot);
+          for(var m=0;m<mine.length;m++){
+            if(!squaresClear(sq, squareCorners(mine[m].cu,mine[m].cw,P.vt[mine[m].t][0],mine[m].rot))) return;
+          }
+          mine.push(g);
+        });
+        vols=vols.concat(mine);
       }
     }
   }
-  var volDeleted={};
 
-  function clearState(){ vol={}; volDeleted={}; regen(false); }
 
   // ---------- panel quad + local frame ----------
   var gpts=[];
@@ -784,7 +1005,7 @@
       n.x+=(a.y-b.y)*(a.z+b.z); n.y+=(a.z-b.z)*(a.x+b.x); n.z+=(a.x-b.x)*(a.y+b.y);
     }
     n.normalize();
-    var th=Math.PI*(i+0.5)/P.na, R=ringR();
+    var th=thAt(i+0.5), R=ringR();
     var inward=new THREE.Vector3(R*Math.cos(th),0,-R*Math.sin(th)).sub(c);
     if(n.dot(inward)<0) n.negate();
     var u=new THREE.Vector3().subVectors(q[1],q[0]);
@@ -795,39 +1016,21 @@
   }
 
   // ---------- one volume, as separate faces ----------
-  function volFaces(i,j,st){
-    var q=panelQuad(i,j), F=localFrame(i,j,q), c=F.c, n=F.n, u=F.u, w=F.w;
-    var S=st.sym;
-    var pol=q.map(function(p){
-      var d=new THREE.Vector3().subVectors(p,c);
-      d.sub(n.clone().multiplyScalar(d.dot(n)));
-      d.multiplyScalar(st.bs);
-      return {r:Math.sqrt(d.dot(u)*d.dot(u)+d.dot(w)*d.dot(w)), a:Math.atan2(d.dot(w),d.dot(u))};
+  // Square base flat on the panel plane, top centred straight above it, so the four
+  // sides of any one type are identical pieces.
+  function volFaces(v){
+    var q=panelQuad(v.i,v.j), F=localFrame(v.i,v.j,q), n=F.n;
+    var side=P.vt[v.t][0], h=P.vt[v.t][1];
+    var C=F.c.clone().addScaledVector(F.u,v.cu).addScaledVector(F.w,v.cw);
+    var base=squareCorners(v.cu,v.cw,side,v.rot).map(function(p){
+      return F.c.clone().addScaledVector(F.u,p[0]).addScaledVector(F.w,p[1]);
     });
-    var rAvg=(pol[0].r+pol[1].r+pol[2].r+pol[3].r)/4;
-    var ar=0;
-    for(var t=0;t<4;t++){
-      var p1=pol[t], p2=pol[(t+1)%4];
-      ar+=p1.r*Math.cos(p1.a)*p2.r*Math.sin(p2.a)-p2.r*Math.cos(p2.a)*p1.r*Math.sin(p1.a);
-    }
-    var sgn=ar>=0?1:-1, sx=0, sy=0;
-    pol.forEach(function(P4,ci){ var a=P4.a-sgn*ci*Math.PI/2; sx+=Math.cos(a); sy+=Math.sin(a); });
-    var a0=Math.atan2(sy,sx);
-    var rot=st.rot*Math.PI/180;
-    var base=pol.map(function(P4,ci){
-      var r2=P4.r+(rAvg-P4.r)*S;
-      var a2=P4.a+wrap(a0+sgn*ci*Math.PI/2-P4.a)*S+rot;
-      return c.clone().add(u.clone().multiplyScalar(r2*Math.cos(a2)))
-                      .add(w.clone().multiplyScalar(r2*Math.sin(a2)));
-    });
-    var skew=u.clone().multiplyScalar(st.su*F.span*(1-S))
-      .add(w.clone().multiplyScalar(st.sw*F.span*(1-S)));
-    var apex=c.clone().add(n.clone().multiplyScalar(st.h)).add(skew);
-
     var faces=[], edg=[], k, k2;
     function E(a,b){ edg.push(a.x,a.y,a.z,b.x,b.y,b.z); }
-    if(st.chop){
-      var top=base.map(function(p){ return p.clone().lerp(apex,0.5); });
+    if(isChop(v.t)){
+      var top=base.map(function(p){
+        return C.clone().addScaledVector(new THREE.Vector3().subVectors(p,C),0.5).addScaledVector(n,h);
+      });
       for(k=0;k<4;k++){
         k2=(k+1)%4;
         faces.push({poly:[base[k],base[k2],top[k2],top[k]], kind:'vside'});
@@ -835,13 +1038,13 @@
       }
       faces.push({poly:[top[0],top[1],top[2],top[3]], kind:'vtop'});
     } else {
+      var apex=C.clone().addScaledVector(n,h);
       for(k=0;k<4;k++){
         k2=(k+1)%4;
         faces.push({poly:[base[k],base[k2],apex], kind:'vside'});
         E(base[k],base[k2]); E(base[k],apex);
       }
     }
-    // bevel where a side face meets the panel: the angle you cut on the base edge
     var f0=flatten(faces[0].poly);
     var bevel=Math.acos(Math.max(-1,Math.min(1,Math.abs(f0.normal.dot(n)))))*180/Math.PI;
     return {faces:faces, edges:edg, bevel:90-bevel};
@@ -892,17 +1095,20 @@
     gpts=[];
     for(var i=0;i<=na;i++){
       gpts[i]=[];
-      for(var j=0;j<=nb;j++) gpts[i][j]=pt(Math.PI*i/na, j);
+      for(var j=0;j<=nb;j++) gpts[i][j]=pt(thAt(i), j);
     }
     clearGroup(panelGroup); clearGroup(volGroup);
     shapes=[]; shapeIdx={};
     var seamPts=[], bands=[], area=0, over=0, holdTris=[], nHolds=0;
+    var FRAME_D=0.55, ceilOver=-1e9, nCeil=0, minWallGap=1e9;
 
+    computeDoor();
     for(var j2=0;j2<nb;j2++){
       var sample=null;
       for(var i2=0;i2<na;i2++){
         var q=panelQuad(i2,j2), s=panelSize(q);
         if(!sample) sample=s;
+        if(isDoor(i2,j2)) continue;                 // cut out for the door
         area+=s.area;
         var fits=s.w<=SHEET_L+1e-6 && s.h<=SHEET_W+1e-6;
         if(!fits) over++;
@@ -921,63 +1127,74 @@
           pn.x+=(qa.y-qb.y)*(qa.z+qb.z); pn.y+=(qa.z-qb.z)*(qa.x+qb.x); pn.z+=(qa.x-qb.x)*(qa.y+qb.y);
         }
         pn.normalize();
-        var thP=Math.PI*(i2+0.5)/na, RP=ringR();
+        var thP=thAt(i2+0.5), RP=ringR();
         var cQ=new THREE.Vector3(); q.forEach(function(p){ cQ.add(p); }); cQ.multiplyScalar(0.25);
         if(pn.dot(new THREE.Vector3(RP*Math.cos(thP),0,-RP*Math.sin(thP)).sub(cQ))<0) pn.negate();
         nHolds += holdsOnFace(q, pn, hr, holdTris);
-        var m=new THREE.Mesh(g, fits?matPanel:matBad);
-        m.userData={kind:'panel', i:i2, j:j2, fits:fits, size:s, sig:pshape.sig};
+        // room fit: framing sits FRAME_D behind the panel, so that is what meets the ceiling
+        var hit=false;
+        q.forEach(function(p){
+          var over=p.y+FRAME_D-ceilAt(p.x);
+          if(over>ceilOver) ceilOver=over;
+          if(over>0) hit=true;
+          var wallGap=Math.min(ROOM_W/2-Math.abs(p.x), p.z-ROOM_Z0);
+          if(wallGap<minWallGap) minWallGap=wallGap;
+        });
+        if(hit) nCeil++;
+        var m=new THREE.Mesh(g, fits?(hit?matCeil:matPanel):matBad);
+        m.userData={kind:'panel', i:i2, j:j2, fits:fits, size:s, sig:pshape.sig, hitsCeil:hit};
         panelGroup.add(m);
         [[0,1],[1,2],[2,3],[3,0]].forEach(function(e){
           seamPts.push(q[e[0]].x,q[e[0]].y,q[e[0]].z, q[e[1]].x,q[e[1]].y,q[e[1]].z);
         });
       }
-      bands.push({band:j2+1,w:sample.w,h:sample.h,qty:na,
+      var doorHere=0; for(var dk in doorCols) if(j2<doorH()) doorHere++;
+      bands.push({band:j2+1,w:sample.w,h:sample.h,qty:na-doorHere,
                   fits:sample.w<=SHEET_L+1e-6&&sample.h<=SHEET_W+1e-6});
     }
 
     var volEdge=[], nVol=0, nChop=0;
-    for(var i3=0;i3<na;i3++){
-      for(var j3=0;j3<nb;j3++){
-        var st=vol[keyOf(i3,j3)];
-        if(!st) continue;
-        var vf=volFaces(i3,j3,st);
-        vf.faces.forEach(function(face,fi){
-          var tri=[];
-          for(var t=1;t<face.poly.length-1;t++){
-            [face.poly[0],face.poly[t],face.poly[t+1]].forEach(function(p){ tri.push(p.x,p.y,p.z); });
-          }
-          var fg=new THREE.BufferGeometry();
-          fg.setAttribute('position', new THREE.Float32BufferAttribute(tri,3));
-          fg.computeVertexNormals();
-          var lab = face.kind==='vtop' ? 'Volume top' : 'Volume side';
-          var fshape = addShapeRef(face.kind, lab, face.poly, face.kind==='vside'?vf.bevel:null);
-          var fn=flatten(face.poly).normal.clone();
-          var fc=new THREE.Vector3();
-          face.poly.forEach(function(p){ fc.add(p); }); fc.multiplyScalar(1/face.poly.length);
-          var cen=new THREE.Vector3();
-          panelQuad(i3,j3).forEach(function(p){ cen.add(p); }); cen.multiplyScalar(0.25);
-          if(fn.dot(new THREE.Vector3().subVectors(fc,cen))<0) fn.negate();
-          nHolds += holdsOnFace(face.poly, fn,
-                     mkRng((i3*613+j3*97+fi*29+P.hseed*3301)>>>0), holdTris);
-          var fm=new THREE.Mesh(fg, matVol);
-          fm.userData={kind:'vol', i:i3, j:j3, face:fi, sig:fshape.sig};
-          volGroup.add(fm);
-        });
-        volEdge=volEdge.concat(vf.edges);
-        nVol++; if(st.chop) nChop++;
-      }
-    }
+    placeVolumes();
+    vols.forEach(function(v){
+      var vf=volFaces(v), seed=0;
+      for(var ci=0;ci<v.id.length;ci++) seed=(seed*31+v.id.charCodeAt(ci))>>>0;
+      var cen=new THREE.Vector3();
+      panelQuad(v.i,v.j).forEach(function(p){ cen.add(p); }); cen.multiplyScalar(0.25);
+      vf.faces.forEach(function(face,fi){
+        var tri=[];
+        for(var t=1;t<face.poly.length-1;t++){
+          [face.poly[0],face.poly[t],face.poly[t+1]].forEach(function(p){ tri.push(p.x,p.y,p.z); });
+        }
+        var fg=new THREE.BufferGeometry();
+        fg.setAttribute('position', new THREE.Float32BufferAttribute(tri,3));
+        fg.computeVertexNormals();
+        var lab = VT_NAMES[v.t]+(face.kind==='vtop' ? ' top' : ' side');
+        var fshape = addShapeRef(face.kind, lab, face.poly, face.kind==='vside'?vf.bevel:null);
+        var fn=flatten(face.poly).normal.clone();
+        var fc=new THREE.Vector3();
+        face.poly.forEach(function(p){ fc.add(p); }); fc.multiplyScalar(1/face.poly.length);
+        if(fn.dot(new THREE.Vector3().subVectors(fc,cen))<0) fn.negate();
+        nHolds += holdsOnFace(face.poly, fn, mkRng((seed+fi*29+P.hseed*3301)>>>0), holdTris);
+        var fm=new THREE.Mesh(fg, matVol);
+        fm.userData={kind:'vol', vid:v.id, i:v.i, j:v.j, face:fi, sig:fshape.sig};
+        volGroup.add(fm);
+      });
+      volEdge=volEdge.concat(vf.edges);
+      nVol++; if(isChop(v.t)) nChop++;
+    });
 
     var off=0.55, framePts=[], offPr=offsetProfile(off);
     for(var i4=0;i4<=na;i4++)
       for(var j4=0;j4<nb;j4++){
-        var a=backPt(Math.PI*i4/na,j4,off,offPr), c2=backPt(Math.PI*i4/na,j4+1,off,offPr);
+        if(isClosed() && i4===na) continue;         // same rib as i4=0 once the ring closes
+        if(isDoor(i4-1,j4) && isDoor(i4,j4)) continue;   // a rib inside the doorway
+        var a=backPt(thAt(i4),j4,off,offPr), c2=backPt(thAt(i4),j4+1,off,offPr);
         framePts.push(a.x,a.y,a.z,c2.x,c2.y,c2.z);
       }
     for(var j5=0;j5<=nb;j5++)
       for(var i5=0;i5<na;i5++){
-        var a2=backPt(Math.PI*i5/na,j5,off,offPr), c3=backPt(Math.PI*(i5+1)/na,j5,off,offPr);
+        if(isDoor(i5,j5)) continue;                 // sill and rails across the doorway; the header stays
+        var a2=backPt(thAt(i5),j5,off,offPr), c3=backPt(thAt(i5+1),j5,off,offPr);
         framePts.push(a2.x,a2.y,a2.z,c3.x,c3.y,c3.z);
       }
 
@@ -1010,7 +1227,16 @@
       (na*nb)+' panels \u00b7 '+holeFt.toFixed(1)+"' hole";
     document.getElementById('sumProf').textContent =
       pr0.length+' pts \u00b7 '+apexFt.toFixed(1)+"' high";
-    document.getElementById('sumVol').textContent = nVol+' volumes';
+    if(document.getElementById('sweepNote')) sweepLabel();
+    var fw=[];
+    var ftin=function(f){ var t=Math.round(f*12); return (t>=12?Math.floor(t/12)+"' ":'')+(t%12)+'"'; };
+    if(nCeil>0) fw.push(nCeil+' panels (orange) run into the sloped ceiling, by up to '+ftin(ceilOver)+
+                        ' including '+Math.round(FRAME_D*12)+'" of framing behind them.');
+    if(minWallGap<0.05) fw.push('The outer wall touches the room walls, leaving no space for framing there.');
+    document.getElementById('fitWarn').textContent=fw.join(' ');
+    document.getElementById('fitWarn').style.display = fw.length?'block':'none';
+    document.getElementById('sumVol').textContent = nVol+' volumes \u00b7 4 sizes'+
+      (volMisfits? ' \u00b7 '+volMisfits+' of yours no longer fit' : '');
     document.getElementById('sumHold').textContent =
       P.hold>0 ? (nHolds+' holds') : 'none';
     document.getElementById('warn').innerHTML = over>0
@@ -1045,7 +1271,8 @@
       shapes.forEach(function(sh){ if(sh.sig===shapeSel.sig) selSig=sh.sig; });
     } else {
       volGroup.children.forEach(function(m){
-        if(m.userData.i===shapeSel.i && m.userData.j===shapeSel.j && m.userData.face===shapeSel.face)
+        if((shapeSel.vid ? m.userData.vid===shapeSel.vid : (m.userData.i===shapeSel.i && m.userData.j===shapeSel.j))
+           && m.userData.face===shapeSel.face)
           selSig=m.userData.sig;
       });
       panelGroup.children.forEach(function(m){
@@ -1131,35 +1358,36 @@
   function applySelection(){
     panelGroup.children.forEach(function(m){
       m.material = (selSig && m.userData.sig===selSig) ? matShape
-                 : (m.userData.fits?matPanel:matBad);
+                 : (m.userData.fits?(m.userData.hitsCeil?matCeil:matPanel):matBad);
     });
     volGroup.children.forEach(function(m){
       m.material = (selSig && m.userData.sig===selSig) ? matShape : matVol;
     });
     if(!sel){ selBox.classList.remove('show'); return; }
-    var hit=null, list=(sel.kind==='vol')?volGroup.children:panelGroup.children;
-    list.forEach(function(m){ if(m.userData.i===sel.i && m.userData.j===sel.j) hit=m; });
-    if(hit) hit.material=matHi;
+    if(sel.kind==='vol'){
+      volGroup.children.forEach(function(m){ if(m.userData.vid===sel.id) m.material=matHi; });
+    } else {
+      panelGroup.children.forEach(function(m){ if(m.userData.i===sel.i && m.userData.j===sel.j) m.material=matHi; });
+    }
     selBox.classList.add('show');
-    var st=vol[keyOf(sel.i,sel.j)];
+    var st=null;
+    if(sel.kind==='vol') vols.forEach(function(v){ if(v.id===sel.id) st=v; });
+    if(sel.kind==='vol' && !st){ sel={kind:'panel', i:sel.i, j:sel.j}; }
     var label='Panel '+(sel.i+1)+' \u00b7 '+(sel.j+1);
     document.getElementById('selTitle').textContent = (sel.kind==='vol')?('Volume on '+label):label;
     var pm=null;
     panelGroup.children.forEach(function(m){ if(m.userData.i===sel.i&&m.userData.j===sel.j) pm=m; });
     var sz=pm?pm.userData.size:null;
     document.getElementById('selSub').textContent = sz
-      ? ('panel blank '+sz.w.toFixed(2)+"' \u00d7 "+sz.h.toFixed(2)+"'"+(st?(' \u00b7 volume '+st.h.toFixed(2)+"' tall"):' \u00b7 no volume'))
+      ? ('panel blank '+sz.w.toFixed(2)+"' \u00d7 "+sz.h.toFixed(2)+"'"+(st?(' \u00b7 '+VT_NAMES[st.t]+', '+
+         Math.round(P.vt[st.t][0]*12)+'in base, '+Math.round(P.vt[st.t][1]*12)+'in tall'):''))
       : '';
     document.getElementById('selEdit').style.display = st?'block':'none';
     document.getElementById('selAdd').style.display  = st?'none':'block';
     if(st){
-      setSlider('eH','vEh',st.h,function(v){return v.toFixed(2)+' ft';});
-      setSlider('eB','vEb',st.bs*100,function(v){return Math.round(v)+'%';});
-      setSlider('eS','vEs',st.sym*100,function(v){return Math.round(v)+'%';});
-      setSlider('eR','vEr',st.rot,function(v){return Math.round(v)+'\u00b0';});
-      var cb=document.getElementById('eChop');
-      cb.textContent = st.chop?'Un-chop':'Chop top';
-      cb.classList.toggle('on', !!st.chop);
+      setSlider('eR','vEr',Math.round(st.rot),function(v){return Math.round(v)+'\u00b0';});
+      [].forEach.call(document.querySelectorAll('#eType button'),function(b){
+        b.classList.toggle('on', parseInt(b.dataset.t,10)===st.t); });
     }
   }
   function setSlider(id,vid,val,fmt){
@@ -1167,55 +1395,65 @@
     el.value=val;
     document.getElementById(vid).textContent=fmt(parseFloat(val));
   }
-  function editVol(fn){
-    if(!sel) return;
-    var k=keyOf(sel.i,sel.j), st=vol[k];
-    if(!st) return;
-    fn(st); st.custom=true;
-    rebuild();
+  function selectedVol(){
+    if(!sel || sel.kind!=='vol') return null;
+    var hit=null; vols.forEach(function(v){ if(v.id===sel.id) hit=v; }); return hit;
   }
-  document.getElementById('eH').oninput=function(){
-    var v=parseFloat(this.value);
-    document.getElementById('vEh').textContent=v.toFixed(2)+' ft';
-    editVol(function(st){ st.h=v; });
-  };
-  document.getElementById('eB').oninput=function(){
-    var v=parseFloat(this.value);
-    document.getElementById('vEb').textContent=Math.round(v)+'%';
-    editVol(function(st){ st.bs=v/100; });
-  };
-  document.getElementById('eS').oninput=function(){
-    var v=parseFloat(this.value);
-    document.getElementById('vEs').textContent=Math.round(v)+'%';
-    editVol(function(st){ st.sym=v/100; });
-  };
+  function others(v){ return vols.filter(function(o){ return o.i===v.i && o.j===v.j && o.id!==v.id; }); }
+  function eMsg(t){ document.getElementById('eMsg').textContent=t||''; }
+  // an edit is kept only if the result still fits on the panel
+  function tryEdit(change, failText){
+    var v=selectedVol(); if(!v) return;
+    var trial={t:v.t, cu:v.cu, cw:v.cw, rot:v.rot};
+    change(trial);
+    if(!volFits(trial, panelOutline(v.i,v.j), others(v))){ eMsg(failText); applySelection(); return; }
+    vEdits[v.id]={i:v.i, j:v.j, t:trial.t, cu:trial.cu, cw:trial.cw, rot:trial.rot};
+    eMsg(''); rebuild();
+  }
+  [].forEach.call(document.querySelectorAll('#eType button'),function(b){
+    b.onclick=function(){
+      var t=parseInt(b.dataset.t,10);
+      tryEdit(function(v){ v.t=t; }, VT_NAMES[t]+' does not fit there. Move it first, or pick a smaller size.');
+    };
+  });
   document.getElementById('eR').oninput=function(){
-    var v=parseFloat(this.value);
-    document.getElementById('vEr').textContent=Math.round(v)+'\u00b0';
-    editVol(function(st){ st.rot=v; });
+    var val=parseFloat(this.value);
+    document.getElementById('vEr').textContent=Math.round(val)+'\u00b0';
+    tryEdit(function(v){ v.rot=val; }, 'That rotation would overhang the panel or touch another volume.');
   };
-  document.getElementById('eChop').onclick=function(){ editVol(function(st){ st.chop=!st.chop; }); };
-  document.getElementById('eRand').onclick=function(){
+  document.getElementById('eMove').onclick=function(){
+    var v=selectedVol(); if(!v) return;
     var r=mkRng(Math.floor(Math.random()*1e6)+1);
-    editVol(function(st){
-      var d=defaults(r);
-      st.h=d.h; st.bs=d.bs; st.chop=d.chop; st.su=d.su; st.sw=d.sw;
-    });
+    var nv=placeNear(v.t, null, null, panelOutline(v.i,v.j), others(v), r, 60);
+    if(!nv){ eMsg('No other spot on this panel fits it.'); return; }
+    vEdits[v.id]={i:v.i, j:v.j, t:v.t, cu:nv.cu, cw:nv.cw, rot:nv.rot};
+    eMsg(''); rebuild();
   };
   document.getElementById('eDel').onclick=function(){
-    if(!sel) return;
-    var k=keyOf(sel.i,sel.j);
-    vol[k]=null; volDeleted[k]=true;
-    sel={kind:'panel', i:sel.i, j:sel.j};
+    var v=selectedVol(); if(!v) return;
+    if(v.id.indexOf('g:')===0) vDel[v.id]=true;
+    delete vEdits[v.id];
+    sel={kind:'panel', i:v.i, j:v.j};
     rebuild();
   };
   document.getElementById('eAdd').onclick=function(){
-    if(!sel) return;
-    var k=keyOf(sel.i,sel.j);
-    var r=mkRng(Math.floor(Math.random()*1e6)+1);
-    var d=defaults(r); d.custom=true;
-    vol[k]=d; delete volDeleted[k];
-    sel={kind:'vol', i:sel.i, j:sel.j};
+    if(!sel || sel.kind!=='panel') return;
+    var outline=panelOutline(sel.i,sel.j);
+    var here=vols.filter(function(o){ return o.i===sel.i && o.j===sel.j; });
+    var cu=null, cw=null;
+    if(sel.hit){   // where you clicked, in the panel's own plane
+      var d=new THREE.Vector3().subVectors(sel.hit, outline.F.c);
+      cu=d.dot(outline.F.u); cw=d.dot(outline.F.w);
+    }
+    var r=mkRng(Math.floor(Math.random()*1e6)+1), order=[0,1,2,3].sort(function(){ return r()-0.5; });
+    var nv=null;
+    for(var k=0;k<4 && !nv;k++) nv=placeNear(order[k], cu, cw, outline, here, r, 40);
+    for(var k2=0;k2<4 && !nv;k2++) nv=placeNear(order[k2], null, null, outline, here, r, 60);
+    if(!nv){ document.getElementById('aMsg').textContent='No room for any of the four sizes on this panel.'; return; }
+    var id='a:'+(++addN);
+    vEdits[id]={i:sel.i, j:sel.j, t:nv.t, cu:nv.cu, cw:nv.cw, rot:nv.rot};
+    sel={kind:'vol', id:id, i:sel.i, j:sel.j};
+    document.getElementById('aMsg').textContent='Adds one where you clicked, if it fits.';
     rebuild();
   };
   document.getElementById('eClose').onclick=function(){
@@ -1226,38 +1464,46 @@
   // Only the parameters, the seed and your manual edits are stored; everything
   // else regenerates from them, which keeps a config small enough for a URL.
   function exportCfg(){
-    var edits={}, del=[];
-    Object.keys(vol).forEach(function(k){
-      if(vol[k] && vol[k].custom){
-        var v=vol[k];
-        edits[k]=[+v.h.toFixed(3), +v.bs.toFixed(3), v.chop?1:0,
-                  +v.su.toFixed(3), +v.sw.toFixed(3), +v.rot.toFixed(1), +v.sym.toFixed(3)];
-      }
+    var ve=Object.keys(vEdits).map(function(id){
+      var e=vEdits[id];
+      return [id, e.i, e.j, e.t, +e.cu.toFixed(3), +e.cw.toFixed(3), +e.rot.toFixed(1)];
     });
-    Object.keys(volDeleted).forEach(function(k){ if(volDeleted[k]) del.push(k); });
-    var c={v:2, p:[P.hole,P.ceil,P.na,P.nb,P.den,P.ht,P.base,P.trunc,P.sym,P.seed,
-                   P.hold,P.hseed], e:edits, d:del};
+    var vd=Object.keys(vDel).filter(function(id){ return vDel[id]; });
+    var c={v:3, p:[P.hole,P.ceil,P.naPer,P.nb,P.den,P.ht,P.base,P.trunc,P.sym,P.seed,
+                   P.hold,P.hseed],
+           vt:P.vt.map(function(x){ return [+x[0].toFixed(3), +x[1].toFixed(3)]; }),
+           ve:ve, vd:vd, an:addN, sw:P.sweep, dr:[P.doorH, P.doorW, P.doorAz]};
     if(P.prof) c.pr=P.prof.map(function(q){ return [+q[0].toFixed(3), +q[1].toFixed(3)]; });
     return c;
   }
   function importCfg(cfg){
-    if(!cfg || (cfg.v!==1 && cfg.v!==2)) throw new Error('unrecognised config');
+    if(!cfg || (cfg.v!==1 && cfg.v!==2 && cfg.v!==3)) throw new Error('unrecognised config');
     var a=cfg.p;
-    P.hole=a[0]; P.ceil=a[1]; P.na=a[2]; P.nb=a[3]; P.den=a[4];
+    P.hole=a[0]; P.ceil=a[1]; P.naPer=a[2]; P.na=a[2]; P.nb=a[3]; P.den=a[4];
     P.ht=a[5]; P.base=a[6]; P.trunc=a[7]; P.sym=a[8]; P.seed=a[9];
     if(a.length>10){ P.hold=a[10]; P.hseed=a[11]; }
     // v1 predates hand-edited profiles, so it always means the generated shape.
-    P.prof = (cfg.v===2 && cfg.pr && cfg.pr.length>=3) ? cfg.pr.map(function(q){
+    P.prof = (cfg.v>=2 && cfg.pr && cfg.pr.length>=3) ? cfg.pr.map(function(q){
       return [+q[0], +q[1]];
     }) : null;
     syncNb();
-    vol={}; volDeleted={}; regen(false);
-    Object.keys(cfg.e||{}).forEach(function(k){
-      var v=cfg.e[k];
-      vol[k]={h:v[0], bs:v[1], chop:!!v[2], su:v[3], sw:v[4], rot:v[5], sym:v[6], custom:true};
-    });
-    (cfg.d||[]).forEach(function(k){ vol[k]=null; volDeleted[k]=true; });
-    syncSliders();
+    P.sweep = cfg.sw || 90;                 // configs before this setting were half rings
+    document.getElementById('sSweep').value=P.sweep;
+    var dr=cfg.dr||[2,1,45]; P.doorH=dr[0]; P.doorW=dr[1]; P.doorAz=dr[2];
+    document.getElementById('sDoorH').value=P.doorH;
+    document.getElementById('sDoorW').value=P.doorW;
+    document.getElementById('sDoorAz').value=P.doorAz;
+    P.na=effNa();
+    clearState();
+    // older configs used free-form volumes; they keep their shape settings, and the
+    // volumes are regenerated from the four sizes
+    if(cfg.v===3){
+      if(cfg.vt && cfg.vt.length===4) P.vt=cfg.vt.map(function(x){ return [+x[0], +x[1]]; });
+      (cfg.ve||[]).forEach(function(e){ vEdits[e[0]]={i:e[1], j:e[2], t:e[3], cu:e[4], cw:e[5], rot:e[6]}; });
+      (cfg.vd||[]).forEach(function(id){ vDel[id]=true; });
+      addN=cfg.an||0;
+    }
+    syncSliders(); syncCatalog(); syncNa();
     sel=null; shapeSel=null;
     rebuild();
     if(typeof drawProfile==='function') drawProfile();
@@ -1267,12 +1513,9 @@
   function syncSliders(){
     var map=[['sHole','vHole','hole',1,function(v){return v.toFixed(1)+' ft';}],
              ['sCeil','vCeil','ceil',1,function(v){return (Math.round(v*100)/100)+' ft';}],
-             ['sNa','vNa','na',1,function(v){return v;}],
+             ['sNa','vNa','naPer',1,function(v){return v;}],
              ['sNb','vNb','nb',1,function(v){return v;}],
              ['sDen','vDen','den',100,function(v){return Math.round(v*100)+'%';}],
-             ['sHt','vHt','ht',1,function(v){return (Math.round(v*100)/100)+' ft';}],
-             ['sBase','vBase','base',100,function(v){return Math.round(v*100)+'%';}],
-             ['sSym','vSym','sym',100,function(v){return Math.round(v*100)+'%';}],
              ['sTrunc','vTrunc','trunc',100,function(v){return Math.round(v*100)+'%';}],
              ['sHold','vHold','hold',100,function(v){return Math.round(v*100)+'%';}]];
     map.forEach(function(m){
@@ -1551,9 +1794,9 @@
     var hits=ray.intersectObjects(targets,false);
     if(!hits.length){ sel=null; applySelection(); return; }
     var d=hits[0].object.userData;
-    sel={kind:d.kind, i:d.i, j:d.j};
-    if(d.kind==='panel' && vol[keyOf(d.i,d.j)]) sel.kind='vol';
-    shapeSel={mode:'face', i:d.i, j:d.j, face:(d.face==null?null:d.face)};
+    sel = d.kind==='vol' ? {kind:'vol', id:d.vid, i:d.i, j:d.j}
+                         : {kind:'panel', i:d.i, j:d.j, hit:hits[0].point.clone()};
+    shapeSel={mode:'face', vid:d.vid, i:d.i, j:d.j, face:(d.face==null?null:d.face)};
     resolveShapeSel(); renderShapeList(); applySelection();
     closeDrawerOnNarrow();
   }
@@ -1573,6 +1816,7 @@
       P[k]=parseFloat(el.value)/(pct?100:1);
       document.getElementById(vid).textContent=fmt(P[k]);
       if((k==='hole'||k==='ceil') && profCustom()) applyProfTransform();
+      if(k==='naPer'){ syncNa(); }
       if(k==='na'||k==='nb'){ sel=null; clearState(); }
       else if(k==='den'||k==='ht'||k==='base'||k==='trunc'||k==='sym') regen(true);
       rebuild();
@@ -1582,12 +1826,78 @@
   }
   bind('sHole','vHole','hole',function(v){return v.toFixed(1)+' ft';});
   bind('sCeil','vCeil','ceil',function(v){return (Math.round(v*100)/100)+' ft';});
-  bind('sNa','vNa','na',function(v){return v;});
+  bind('sNa','vNa','naPer',function(v){return v;});
   bind('sNb','vNb','nb',function(v){return v;});
+  var AZ_NAMES={0:'front',45:'front-right corner',90:'right',135:'back-right corner',
+                180:'back',225:'back-left corner',270:'left',315:'front-left corner'};
+  function sweepLabel(){
+    var eff=Math.round(sweepHalf()*180/Math.PI);
+    document.getElementById('vSweep').innerHTML='&plusmn;'+eff+'&deg;';
+    document.getElementById('sweepNote').innerHTML = isClosed()
+      ? 'Full ring. You get in through the door below.'
+      : '&plusmn;'+eff+'&deg; either side of straight back: '+(2*eff)+'&deg; of ring, open at both ends.'+
+        (eff===90?' This is the half ring.':'');
+    document.getElementById('doorOpts').style.display = isClosed() ? 'block' : 'none';
+    if(!isClosed()) return;
+    var hEl=document.getElementById('sDoorH'); hEl.max=doorHmax();
+    var dh=doorH(), cols=Object.keys(doorCols).map(Number);
+    // real size of the opening: height at the header, width across the floor
+    var htFt=0, wdFt=0;
+    if(dh>0 && cols.length){
+      var mid=cols.length ? cols[0] : 0;
+      htFt=pt(thAt(mid+0.5), dh).y;
+      var lo=Infinity, hi=-Infinity;
+      cols.forEach(function(c){ if(c<lo) lo=c; if(c>hi) hi=c; });
+      if(hi-lo+1!==cols.length){ lo=hi; hi=lo+cols.length-1; }   // wraps past panel 0
+      wdFt=pt(thAt(lo),0).distanceTo(pt(thAt(hi+1),0));
+    }
+    var ftin=function(f){ var t=Math.round(f*12); return Math.floor(t/12)+"' "+(t%12)+'"'; };
+    document.getElementById('vDoorH').textContent = dh ? dh+' panel'+(dh>1?'s':'')+' \u00b7 '+ftin(htFt) : 'no door';
+    document.getElementById('vDoorW').textContent = P.doorW+' panel'+(P.doorW>1?'s':'')+(dh?' \u00b7 '+ftin(wdFt):'');
+    var az=P.doorAz, nm=AZ_NAMES[az];
+    document.getElementById('vDoorAz').textContent = az+'\u00b0'+(nm?' \u00b7 '+nm:'');
+    var warn=[];
+    if(dh===0) warn.push('No door: the ring is sealed.');
+    if(dh>0 && htFt<6.5) warn.push('Under 6\'6" tall: most adults will duck.');
+    if(dh>0 && wdFt<2.5) warn.push('Under 2\'6" wide: tight to get through.');
+    var dx=Math.sin(az*Math.PI/180), dz=Math.cos(az*Math.PI/180), toWall=1e9;
+    if(dx>1e-6) toWall=Math.min(toWall,(ROOM_W/2)/dx); if(dx<-1e-6) toWall=Math.min(toWall,(-ROOM_W/2)/dx);
+    if(dz>1e-6) toWall=Math.min(toWall,ROOM_Z1/dz);     if(dz<-1e-6) toWall=Math.min(toWall,ROOM_Z0/dz);
+    var outerR=0; for(var jj=0;jj<1;jj++){ var op=pt(thAt(0),0); outerR=Math.hypot(op.x,op.z); }
+    var clear=toWall-outerR;
+    if(clear<3) warn.push('Only '+ftin(Math.max(0,clear))+' of floor outside this door before the room wall. Facing the front (0\u00b0) opens onto the open half of the room.');
+    if(P.doorH>doorHmax()) warn.push('Capped at '+doorHmax()+' panels so the overhead stays intact.');
+    document.getElementById('doorNote').textContent = warn.join(' ');
+  }
+  [['sDoorH','doorH'],['sDoorW','doorW'],['sDoorAz','doorAz']].forEach(function(d){
+    var el=document.getElementById(d[0]);
+    el.oninput=function(){ P[d[1]]=parseFloat(el.value); rebuild(); };
+  });
+  var swEl=document.getElementById('sSweep');
+  swEl.oninput=function(){ P.sweep=parseFloat(swEl.value); syncNa(); rebuild(); };
   bind('sDen','vDen','den',function(v){return Math.round(v*100)+'%';});
-  bind('sHt','vHt','ht',function(v){return (Math.round(v*100)/100)+' ft';});
-  bind('sBase','vBase','base',function(v){return Math.round(v*100)+'%';});
-  bind('sSym','vSym','sym',function(v){return Math.round(v*100)+'%';});
+  // the four sizes, entered in inches
+  function syncCatalog(){
+    for(var t=0;t<4;t++){
+      document.getElementById('vt'+t+'b').value=Math.round(P.vt[t][0]*12);
+      document.getElementById('vt'+t+'h').value=Math.round(P.vt[t][1]*12);
+    }
+    document.getElementById('vt2t').textContent=Math.round(P.vt[2][0]*6)+'in';
+    document.getElementById('vt3t').textContent=Math.round(P.vt[3][0]*6)+'in';
+  }
+  [0,1,2,3].forEach(function(t){
+    ['b','h'].forEach(function(dim,di){
+      var el=document.getElementById('vt'+t+dim);
+      el.onchange=el.oninput=function(){
+        var inches=parseFloat(el.value);
+        if(!(inches>0)) return;
+        inches=Math.max(parseFloat(el.min), Math.min(parseFloat(el.max), inches));
+        P.vt[t][di]=inches/12;
+        syncCatalog(); rebuild();
+      };
+    });
+  });
+  syncCatalog();
   bind('sTrunc','vTrunc','trunc',function(v){return Math.round(v*100)+'%';});
   bind('sHold','vHold','hold',function(v){return Math.round(v*100)+'%';});
 
@@ -1615,10 +1925,16 @@
   },false);
   toggle('tSeams',function(v){ seams.userData.want=v; applyLook(); },true);
   toggle('tFrame',function(v){ frame.userData.want=v; applyLook(); },true);
-  toggle('tFig',function(v){ fig.visible=v; },true);
+  toggle('tFig',function(v){ figWanted=v; fig.visible = v && !walking; },true);
   toggle('tWalls',function(v){ walls.userData.want=v; applyLook(); },true);
   toggle('tLamp',function(v){ lamp.visible=v; },true);
   toggle('tLook',function(v){ renderLook=v; applyLook(); },true);
+  var roomOpEl=document.getElementById('sRoomOp');
+  roomOpEl.oninput=function(){
+    roomOpacity=parseFloat(roomOpEl.value)/100;
+    document.getElementById('vRoomOp').textContent=roomOpEl.value+'%';
+    applyLook(); markDirty();
+  };
 
   // +1 drags the model with the pointer (the model goes the way you drag);
   // -1 drags the camera instead, which makes the model go the opposite way.
@@ -1680,13 +1996,16 @@
   setSpeed(speed);
 
   [].forEach.call(document.querySelectorAll('[data-view]'),function(bt){
-    bt.onclick=function(){ var v=views[bt.dataset.view]; pos.copy(v[0]); yaw=v[1]; pitch=v[2]; };
+    bt.onclick=function(){
+      if(walking) setWalking(false);
+      var v=views[bt.dataset.view]; pos.copy(v[0]); yaw=v[1]; pitch=v[2];
+    };
   });
 
   var keys={};
   addEventListener('keydown',function(e){
     var k=e.key.toLowerCase();
-    if(['w','a','s','d','q','z'].indexOf(k)>=0) e.preventDefault();
+    if(['w','a','s','d','q','z','arrowup','arrowdown','arrowleft','arrowright'].indexOf(k)>=0) e.preventDefault();
     keys[k]=true;
   });
   addEventListener('keyup',function(e){ keys[e.key.toLowerCase()]=false; });
@@ -1708,11 +2027,255 @@
     return Math.sqrt(dx*dx+dy*dy);
   }
 
+  // ---------- orbit ----------
+  // The camera swings round the pivot AND turns by the same angle, so the pivot
+  // stays exactly where it was on screen: no jump at the start of a drag.
+  var mouseMode='look', orbiting=false, lastPivot=null, pivotHideAt=0, recenter=null;
+  var oray=new THREE.Raycaster();
+  var pivotMark=new THREE.Mesh(new THREE.SphereGeometry(0.13,16,12),
+    new THREE.MeshBasicMaterial({color:0xff7a1a, depthTest:false, transparent:true, opacity:0.95}));
+  var pivotRing=new THREE.Mesh(new THREE.RingGeometry(0.30,0.36,40),
+    new THREE.MeshBasicMaterial({color:0xff7a1a, depthTest:false, transparent:true, opacity:0.75, side:THREE.DoubleSide}));
+  pivotMark.renderOrder=999; pivotRing.renderOrder=999;
+  // skip tone mapping and convert from sRGB so the marker stays a true, vivid orange
+  [pivotMark.material, pivotRing.material].forEach(function(m){ m.toneMapped=false; lin(m.color); });
+  pivotMark.add(pivotRing); pivotMark.visible=false; scene.add(pivotMark);
+
+  function rayHit(cx, cy){
+    var r=cv.getBoundingClientRect();
+    var nd=new THREE.Vector2(((cx-r.left)/r.width)*2-1, -((cy-r.top)/r.height)*2+1);
+    oray.setFromCamera(nd,camera);
+    var t=[].concat(volGroup.visible?volGroup.children:[], panelGroup.children, [floor],
+                    holdMesh.visible?[holdMesh]:[]);
+    // raycasts ignore visibility, so skip anything hidden (e.g. the cut-away ceiling)
+    var h=oray.intersectObjects(t,false).filter(function(x){
+      for(var o=x.object; o; o=o.parent) if(!o.visible) return false;
+      return true;
+    });
+    return h.length ? h[0].point.clone() : null;
+  }
+  // How much of the canvas the control panel covers on the left. Only a tall side
+  // panel counts; a collapsed panel or a bottom sheet on a phone covers nothing.
+  function panelInset(){
+    var ui=document.getElementById('ui'); if(!ui) return 0;
+    var cs=getComputedStyle(ui); if(cs.display==='none' || cs.visibility==='hidden') return 0;
+    var r=ui.getBoundingClientRect(), c=cv.getBoundingClientRect();
+    if(r.width<1 || r.height<c.height*0.5 || r.width>c.width*0.55 || r.left>c.left+60) return 0;
+    return Math.max(0, r.right-c.left);
+  }
+  // the middle of the part of the view you can actually see
+  function visibleCentre(){
+    var c=cv.getBoundingClientRect(), inset=panelInset();
+    return {x:c.left+inset+(c.width-inset)/2, y:c.top+c.height/2};
+  }
+  function screenCentre(){ var v=visibleCentre(); return rayHit(v.x, v.y); }
+  function caveCentre(){
+    var b=new THREE.Box3().setFromObject(panelGroup);
+    if(b.isEmpty()) return new THREE.Vector3(0,4,-4);
+    var c=b.getCenter(new THREE.Vector3()); c.y=b.max.y*0.4; return c;
+  }
+  // the pivot is sticky: it only changes when you click or tap a new surface
+  function ensurePivot(){
+    if(lastPivot) return lastPivot;
+    lastPivot = screenCentre() || caveCentre();
+    return lastPivot;
+  }
+  // turn smoothly to face a point, keeping your position
+  function startRecenter(p){
+    var f=new THREE.Vector3().subVectors(p,pos); if(f.lengthSq()<1e-8) return;
+    f.normalize();
+    var ty=Math.atan2(-f.x,-f.z), tp=Math.asin(Math.max(-1,Math.min(1,f.y)));
+    // Refine so the point lands in the middle of the VISIBLE area (not behind the
+    // control panel): project it with the trial orientation and correct, a few times.
+    var c=cv.getBoundingClientRect(), vc=visibleCentre();
+    var tx=((vc.x-c.left)/c.width)*2-1, tyN=-((vc.y-c.top)/c.height)*2+1;
+    var tanV=Math.tan(camera.fov*Math.PI/360), tanH=tanV*camera.aspect;
+    var trial=camera.clone();
+    for(var it=0; it<5; it++){
+      var tf=new THREE.Vector3(-Math.sin(ty)*Math.cos(tp), Math.sin(tp), -Math.cos(ty)*Math.cos(tp));
+      trial.position.copy(pos); trial.lookAt(pos.clone().add(tf)); trial.updateMatrixWorld();
+      var v=p.clone().project(trial);
+      ty -= Math.atan((v.x-tx)*tanH);
+      tp = Math.max(-1.5, Math.min(1.5, tp + Math.atan((v.y-tyN)*tanV)));
+    }
+    var dy=ty-yaw; while(dy>Math.PI) dy-=2*Math.PI; while(dy<-Math.PI) dy+=2*Math.PI;
+    recenter={y0:yaw, p0:pitch, dy:dy, dp:Math.max(-1.5,Math.min(1.5,tp))-pitch,
+              t0:performance.now(), dur:320};
+    markDirty();
+  }
+  function aimAt(p){
+    var f=new THREE.Vector3().subVectors(p,pos); if(f.lengthSq()<1e-8) return;
+    f.normalize(); yaw=Math.atan2(-f.x,-f.z); pitch=Math.asin(Math.max(-1,Math.min(1,f.y)));
+  }
+  function showPivot(p){
+    pivotMark.position.copy(p); pivotMark.visible=true;
+    pivotHideAt=performance.now()+1400;
+  }
+  function orbitBy(dx, dy){
+    if(!lastPivot) return;
+    var p=lastPivot, off=new THREE.Vector3().subVectors(pos,p);
+    // around the vertical axis
+    var dTh=-dragSign*dx*0.005;
+    off.applyAxisAngle(new THREE.Vector3(0,1,0), dTh);
+    yaw+=dTh;
+    // over the top, around the camera's own right-hand axis, within the look limits
+    var dPh=-dragSign*dy*0.005;
+    var np=Math.max(-1.5, Math.min(1.5, pitch+dPh)); dPh=np-pitch;
+    var right=new THREE.Vector3(Math.cos(yaw),0,-Math.sin(yaw));
+    off.applyAxisAngle(right, dPh);
+    pitch=np;
+    pos.copy(p).add(off);
+    markDirty();
+  }
+  function zoomBy(dy, cx, cy){
+    dy=Math.max(-240, Math.min(240, dy));
+    if(walking){
+      var st=-dy*0.02*Math.max(0.5, speed/9);
+      walkMove(-Math.sin(yaw)*st, -Math.cos(yaw)*st); return;
+    }
+    if(mouseMode==='orbit'){
+      var p = ensurePivot();
+      var off=new THREE.Vector3().subVectors(pos,p);
+      var d=off.length(), nd=Math.max(0.4, d*Math.exp(dy*0.0015));
+      if(d>1e-6) pos.copy(p).addScaledVector(off.divideScalar(d), nd);
+      showPivot(p);
+    } else {
+      dolly(-dy*0.02*Math.max(0.5, speed/9));
+    }
+    markDirty();
+  }
+  function setMouseMode(m){
+    mouseMode=m;
+    [].forEach.call(document.querySelectorAll('#mouseMode button'),function(b){
+      b.classList.toggle('on', b.dataset.mm===m); });
+    document.getElementById('orbitOpts').style.display = m==='orbit' ? 'block' : 'none';
+    if(m!=='orbit'){ pivotMark.visible=false; recenter=null; }
+    else { lastPivot=null; showPivot(ensurePivot()); }
+    markDirty();
+  }
+
+  [].forEach.call(document.querySelectorAll('#mouseMode button'),function(b){
+    b.onclick=function(){ if(walking && b.dataset.mm==='orbit') setWalking(false); setMouseMode(b.dataset.mm); }; });
+  addEventListener('keydown',function(e){
+    if(e.target && /INPUT|TEXTAREA/.test(e.target.tagName)) return;
+    if(e.key==='o'||e.key==='O'){ if(walking) setWalking(false); setMouseMode(mouseMode==='orbit'?'look':'orbit'); }
+  });
+
+  // ---------- walk as the figure ----------
+  // Eye level sits about 5in below the top of the head. The body is tested as a
+  // column at several heights against the real panels, volumes and room walls,
+  // plus a headroom check straight up, so a sloping roof stops you at the head
+  // before your feet reach the wall - exactly as it would stop a real person.
+  var walking=false, wray=new THREE.Raycaster();
+  function eyeH(){ return FIG_H-0.42; }
+  function bodyR(){ return 0.6*figScale(); }
+  function headR(){ return 0.42*figScale(); }
+  var DIRS=[]; for(var di=0;di<8;di++) DIRS.push(new THREE.Vector3(Math.cos(di*Math.PI/4),0,Math.sin(di*Math.PI/4)));
+  var UP=new THREE.Vector3(0,1,0);
+  function solids(){ return [].concat(panelGroup.children, volGroup.visible?volGroup.children:[]); }
+  function isFree(x,z){
+    var rb=bodyR(), rh=headR(), H=FIG_H;
+    // room walls are flat, so test them directly
+    if(!inRoom(x,z,rb)) return false;
+    var targets=solids(), o=new THREE.Vector3();
+    // headroom: nothing between the knees and the top of the head
+    o.set(x,0.5,z); wray.set(o,UP); wray.far=H-0.5+0.04;
+    if(wray.intersectObjects(targets,false).length) return false;
+    // a ring of short rays at each height: body width low down, head width up top
+    var bands=[[0.35,rb],[H*0.45,rb],[H-0.75,rb],[H-0.35,rh],[H-0.08,rh]];
+    for(var bi=0;bi<bands.length;bi++){
+      o.set(x,bands[bi][0],z); wray.far=bands[bi][1];
+      for(var k=0;k<DIRS.length;k++){
+        wray.set(o,DIRS[k]);
+        if(wray.intersectObjects(targets,false).length) return false;
+      }
+    }
+    return true;
+  }
+  // move with sub-steps, sliding along whatever blocks you
+  function walkMove(dx,dz){
+    var len=Math.sqrt(dx*dx+dz*dz); if(len<1e-6) return;
+    var steps=Math.max(1,Math.ceil(len/(bodyR()*0.4))), sx=dx/steps, sz=dz/steps;
+    for(var i=0;i<steps;i++){
+      if(isFree(pos.x+sx,pos.z+sz)){ pos.x+=sx; pos.z+=sz; }
+      // slide along whichever axis is still open, but only one you are actually moving on
+      else if(Math.abs(sx)>1e-9 && Math.abs(sz)>1e-9 && isFree(pos.x+sx,pos.z)) pos.x+=sx;
+      else if(Math.abs(sx)>1e-9 && Math.abs(sz)>1e-9 && isFree(pos.x,pos.z+sz)) pos.z+=sz;
+      else {
+        // blocked: close the remaining gap so you end up touching distance away,
+        // exactly as near as the figure's body allows
+        var lo=0, hi=1;
+        for(var it=0; it<6; it++){
+          var mid=(lo+hi)/2;
+          if(isFree(pos.x+sx*mid, pos.z+sz*mid)) lo=mid; else hi=mid;
+        }
+        if(lo>0){ pos.x+=sx*lo; pos.z+=sz*lo; }
+        break;
+      }
+    }
+    pos.y=eyeH(); markDirty();
+  }
+  function findFreeNear(x,z){
+    if(isFree(x,z)) return {x:x,z:z};
+    for(var r=0.25;r<14;r+=0.25){
+      for(var a=0;a<24;a++){
+        var t=a/24*Math.PI*2, px=x+Math.cos(t)*r, pz=z+Math.sin(t)*r;
+        if(isFree(px,pz)) return {x:px,z:pz};
+      }
+    }
+    return null;
+  }
+  function setWalking(on){
+    walking=on;
+    document.getElementById('tWalk').classList.toggle('on',on);
+    document.getElementById('walkNote').style.display = on?'block':'none';
+    if(on){
+      if(mouseMode==='orbit') setMouseMode('look');
+      fig.visible=false;
+      // start where you are if that's a legal spot, otherwise where the figure stands
+      var inside = inRoom(pos.x,pos.z,0);
+      var spot = inside ? findFreeNear(pos.x,pos.z) : null;
+      if(!spot){ spot=findFreeNear(fig.position.x,fig.position.z); yaw=1.57; }
+      if(spot){ pos.x=spot.x; pos.z=spot.z; }
+      pos.y=eyeH(); pitch=Math.max(-0.6,Math.min(0.6,pitch));
+    } else {
+      fig.visible = figWanted;
+    }
+    updateEye(); markDirty();
+  }
+  var figWanted=true;
+  function updateEye(){
+    var e=eyeH(), ft=Math.floor(e), inch=Math.round((e-ft)*12);
+    if(inch===12){ ft++; inch=0; }
+    document.getElementById('vEye').textContent=ft+"' "+inch+"''";
+  }
+  document.getElementById('tWalk').onclick=function(){ setWalking(!walking); };
+  addEventListener('keydown',function(e){
+    if(e.target && /INPUT|TEXTAREA/.test(e.target.tagName)) return;
+    if(e.key==='f'||e.key==='F') setWalking(!walking);
+  });
+  var figHEl=document.getElementById('sFigH');
+  figHEl.oninput=function(){
+    var inches=parseInt(figHEl.value,10);
+    FIG_H=inches/12; applyFigHeight();
+    document.getElementById('vFigH').textContent=Math.floor(inches/12)+"' "+(inches%12)+"''";
+    if(walking){
+      pos.y=eyeH();
+      // growing taller can put your head in the roof: step to the nearest legal spot
+      if(!isFree(pos.x,pos.z)){ var sp=findFreeNear(pos.x,pos.z); if(sp){ pos.x=sp.x; pos.z=sp.z; } }
+    }
+    updateEye(); markDirty();
+  };
+  updateEye();
+
   cv.addEventListener('pointerdown',function(e){
     if(!pts[e.pointerId]) nPts++;
     pts[e.pointerId]={x:e.clientX,y:e.clientY};
     cv.setPointerCapture(e.pointerId);
-    if(nPts===1){ drag=true; moved=0; lx=e.clientX; ly=e.clientY; }
+    if(nPts===1){
+      drag=true; moved=0; lx=e.clientX; ly=e.clientY;
+      if(mouseMode==='orbit'){ ensurePivot(); showPivot(lastPivot); orbiting=true; recenter=null; }
+    }
     else { drag=false; pinchD=pinchDist(); }   // a second finger cancels look-around
   });
 
@@ -1721,15 +2284,25 @@
     pts[e.pointerId].x=e.clientX; pts[e.pointerId].y=e.clientY;
     if(nPts>=2){                                // two fingers: pinch to move in/out
       var d=pinchDist();
-      if(pinchD>0 && d>0){ dolly((d-pinchD)*0.035); moved+=Math.abs(d-pinchD); }
+      if(pinchD>0 && d>0){
+        if(mouseMode==='orbit'){
+          var a2=[]; for(var id2 in pts) a2.push(pts[id2]);
+          zoomBy(-(d-pinchD)*3, (a2[0].x+a2[1].x)/2, (a2[0].y+a2[1].y)/2);
+        } else if(walking){ var st2=(d-pinchD)*0.035; walkMove(-Math.sin(yaw)*st2, -Math.cos(yaw)*st2); }
+        else dolly((d-pinchD)*0.035);
+        moved+=Math.abs(d-pinchD);
+      }
       pinchD=d;
       return;
     }
     if(!drag) return;
     var dx=e.clientX-lx, dy=e.clientY-ly;
     moved+=Math.abs(dx)+Math.abs(dy);
-    yaw+=dragSign*dx*0.005; pitch+=dragSign*dy*0.005;
-    pitch=Math.max(-1.5,Math.min(1.5,pitch));
+    if(mouseMode==='orbit' && orbiting){ orbitBy(dx,dy); showPivot(lastPivot); }
+    else {
+      yaw+=dragSign*dx*0.005; pitch+=dragSign*dy*0.005;
+      pitch=Math.max(-1.5,Math.min(1.5,pitch));
+    }
     lx=e.clientX; ly=e.clientY;
     markDirty();
   });
@@ -1738,15 +2311,22 @@
     if(!pts[e.pointerId]) return;
     delete pts[e.pointerId]; nPts=Math.max(0,nPts-1);
     if(nPts===0){
-      if(drag && moved<10) pick(e);   // a tap, not a look-around drag
-      drag=false; pinchD=0;
+      if(drag && moved<10){           // a tap, not a drag
+        if(mouseMode==='orbit' && !walking){
+          var h=rayHit(e.clientX,e.clientY);   // empty space leaves the pivot where it is
+          if(h){ lastPivot=h; showPivot(h); startRecenter(h); }
+        } else pick(e);
+      }
+      drag=false; pinchD=0; orbiting=false;
     } else { pinchD=pinchDist(); }
   }
   cv.addEventListener('pointerup',endPointer);
   cv.addEventListener('pointercancel',endPointer);
 
   cv.addEventListener('wheel',function(e){
-    e.preventDefault(); setSpeed(speed*(e.deltaY>0?1.12:0.89));
+    e.preventDefault();
+    var dy=e.deltaY*(e.deltaMode===1?33:(e.deltaMode===2?400:1));
+    zoomBy(dy, e.clientX, e.clientY);
   },{passive:false});
 
   // No hardware keyboard means WASD/QZ are unavailable, so reveal the move pad.
@@ -1788,21 +2368,47 @@
   var clock=new THREE.Clock();
   function tick(){
     var dt=Math.min(clock.getDelta(),0.1);
+    if(recenter){
+      var rt=Math.min(1,(performance.now()-recenter.t0)/recenter.dur);
+      var ease=rt<0.5 ? 2*rt*rt : 1-Math.pow(-2*rt+2,2)/2;
+      yaw=recenter.y0+recenter.dy*ease; pitch=recenter.p0+recenter.dp*ease;
+      if(rt>=1) recenter=null;
+      markDirty();
+    }
     var fwd=new THREE.Vector3(-Math.sin(yaw)*Math.cos(pitch),Math.sin(pitch),-Math.cos(yaw)*Math.cos(pitch));
     var right=new THREE.Vector3(Math.cos(yaw),0,-Math.sin(yaw));
     var v=new THREE.Vector3();
-    if(keys['w']||pad.f)v.add(fwd);
-    if(keys['s']||pad.b)v.sub(fwd);
-    if(keys['d']||pad.r)v.add(right);
-    if(keys['a']||pad.l)v.sub(right);
+    if(keys['w']||keys['arrowup']||pad.f)v.add(fwd);
+    if(keys['s']||keys['arrowdown']||pad.b)v.sub(fwd);
+    if(keys['d']||keys['arrowright']||pad.r)v.add(right);
+    if(keys['a']||keys['arrowleft']||pad.l)v.sub(right);
     if(keys['q']||pad.u)v.y+=1;
     if(keys['z']||pad.d)v.y-=1;
-    if(v.lengthSq()>0){ pos.addScaledVector(v.normalize(), speed*dt); markDirty(); }
+    if(walking){
+      // walk on the ground plane at a walking pace; up/down keys do nothing
+      var g=new THREE.Vector3();
+      var flat=new THREE.Vector3(-Math.sin(yaw),0,-Math.cos(yaw));
+      if(keys['w']||keys['arrowup']||pad.f) g.add(flat);
+      if(keys['s']||keys['arrowdown']||pad.b) g.sub(flat);
+      if(keys['d']||keys['arrowright']||pad.r) g.add(right);
+      if(keys['a']||keys['arrowleft']||pad.l) g.sub(right);
+      if(g.lengthSq()>0){
+        g.normalize().multiplyScalar(Math.min(speed,6)*dt);
+        walkMove(g.x,g.z);
+      }
+      if(Math.abs(pos.y-eyeH())>1e-4){ pos.y=eyeH(); }
+    } else if(v.lengthSq()>0){ pos.addScaledVector(v.normalize(), speed*dt); markDirty(); }
     camera.position.copy(pos); lamp.position.copy(pos);
     // cutaway: in render look the ceiling only appears when you are inside the room
-    if(typeof ceilM!=='undefined')
-      ceilM.visible = !renderLook || (Math.abs(pos.x)<RX/2 && Math.abs(pos.z)<RY/2 && pos.y<RZ);
+
     camera.lookAt(pos.clone().add(fwd));
+    if(pivotMark.visible){
+      pivotRing.lookAt(camera.position);
+      var keep = mouseMode==='orbit';
+      if(!keep && performance.now()>pivotHideAt) pivotMark.visible=false;
+      // constant apparent size regardless of distance
+      pivotMark.scale.setScalar(Math.max(0.35, camera.position.distanceTo(pivotMark.position)*0.06));
+    }
     renderer.render(scene,camera);
     requestAnimationFrame(tick);
   }
@@ -1822,6 +2428,13 @@
   resize(); clearState(); rebuild(); drawProfile();
   // A config in the address is an explicit request and wins over the saved
   // session; otherwise pick up exactly where this browser left off.
+  // What a first-time visitor sees: Greg's design, full ring with door. Colours are
+  // left to follow the visitor's light or dark theme.
+  var DEFAULT_CFG={"v":3,"p":[3.5,12,8,6,0.3,1.5,0.4,0.5,1,90226,0.75,9503],"vt":[[2,0.833],[1.167,0.583],[2,0.583],[1.167,0.417]],"ve":[],"vd":[],"an":0,"sw":180,"dr":[2,2,0],"pr":[[10,0],[8.75,6.75],[8.75,12],[5.5,10.75],[2.75,12],[1,7.5],[1.75,0]],"view":{"cam":[7.5,5.8,24.0],"yaw":0.464,"pitch":-0.165,"speed":9,"fov":70,"t":"110111111"}};
+  function applyDefaults(){
+    try{ importCfg(JSON.parse(JSON.stringify(DEFAULT_CFG))); drawProfile(); }
+    catch(e){ /* fall back to the built-in shape rather than fail to open */ }
+  }
   if(!loadFromAddress()){
     var saved=loadSession();
     if(saved){
@@ -1832,9 +2445,10 @@
         msg('Restored your last setup.');
       }catch(e){
         forgetSession();          // corrupt or from an older build: start clean
+        applyDefaults();
         msg('Saved setup could not be read, so it was discarded.');
       }
-    }
+    } else applyDefaults();
   }
   tick();
 })();
