@@ -274,6 +274,7 @@
         <button id="tFig" class="on">6&#39; figure</button>
         <button id="tWalls" class="on">Room</button>
         <button id="tLamp" class="on">Headlamp</button>
+        <button id="tClash" class="on" title="Where the cave runs into the ceiling">Ceiling clash</button>
         <button id="tLook" class="on" title="Shadows, tone mapping and solid framing. Turn off on slow devices.">Render look</button>
       </div>
     </div>
@@ -776,6 +777,58 @@
   var matHold =new THREE.MeshStandardMaterial({color:0x1f6fb2,roughness:0.55,flatShading:true});
   // panels that, with their framing, run into the ceiling
   var matCeil =new THREE.MeshStandardMaterial({color:0xd9861f,roughness:0.8,side:THREE.DoubleSide,flatShading:true});
+  // ---------- ceiling clash overlay ----------
+  // Cut from the real panel triangles: red where the panel is above the ceiling,
+  // amber where it is below but within framing depth of it. Drawn just in front of
+  // the panels so it never flickers against them.
+  function clashMat(hex,op){
+    var m=new THREE.MeshStandardMaterial({color:hex,roughness:0.6,side:THREE.DoubleSide,
+      flatShading:true,transparent:op<1,opacity:op,emissive:hex,emissiveIntensity:0.18,
+      polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2});
+    lin(m.color); lin(m.emissive); return m;
+  }
+  var clashAbove=new THREE.Mesh(new THREE.BufferGeometry(), clashMat(0xd0312d,1));
+  var clashZone =new THREE.Mesh(new THREE.BufferGeometry(), clashMat(0xe8a13a,0.9));
+  // bright, so the exact collision edge stands out against both the red and the amber
+  var clashLineMat=new THREE.MeshBasicMaterial({color:0x14d8ff, toneMapped:false,
+    polygonOffset:true, polygonOffsetFactor:-6, polygonOffsetUnits:-6});
+  lin(clashLineMat.color);
+  var clashLine =new THREE.Mesh(new THREE.BufferGeometry(), clashLineMat);
+  var clashGroup=new THREE.Group();
+  clashGroup.add(clashAbove); clashGroup.add(clashZone); clashGroup.add(clashLine);
+  scene.add(clashGroup);
+  // depth label at the worst point
+  var clashLabel=(function(){
+    var cvs=document.createElement('canvas'); cvs.width=512; cvs.height=128;
+    var tex=new THREE.CanvasTexture(cvs);
+    var sp=new THREE.Sprite(new THREE.SpriteMaterial({map:tex, depthTest:false, transparent:true, toneMapped:false}));
+    sp.renderOrder=1000; sp.scale.set(3.6,0.9,1); sp.visible=false;
+    sp.userData.draw=function(text){
+      var c=cvs.getContext('2d'); c.clearRect(0,0,512,128);
+      c.fillStyle='rgba(160,24,18,0.92)';
+      var r=28; c.beginPath(); c.moveTo(r,8); c.arcTo(504,8,504,120,r); c.arcTo(504,120,8,120,r);
+      c.arcTo(8,120,8,8,r); c.arcTo(8,8,504,8,r); c.fill();
+      c.fillStyle='#fff'; c.font='600 50px system-ui,-apple-system,Segoe UI,sans-serif';
+      c.textAlign='center'; c.textBaseline='middle'; c.fillText(text,256,66);
+      tex.needsUpdate=true;
+    };
+    return sp;
+  })();
+  clashGroup.add(clashLabel);
+  // keep the part of a polygon where fn(v) >= 0
+  function clipKeep(poly, fn){
+    var out=[], n=poly.length;
+    for(var i=0;i<n;i++){
+      var a=poly[i], b=poly[(i+1)%n], fa=fn(a), fb=fn(b);
+      if(fa>=0) out.push(a);
+      if((fa>=0)!==(fb>=0)) out.push(a.clone().lerp(b, fa/(fa-fb)));
+    }
+    return out;
+  }
+  function fanInto(poly, arr){
+    for(var k=1;k<poly.length-1;k++)
+      [poly[0],poly[k],poly[k+1]].forEach(function(p){ arr.push(p.x,p.y,p.z); });
+  }
   [matBad,matHi,matShape].forEach(function(m){ lin(m.color); if(m.emissive) lin(m.emissive); });
   var panelGroup=new THREE.Group(), volGroup=new THREE.Group();
   scene.add(panelGroup); scene.add(volGroup);
@@ -1101,6 +1154,7 @@
     shapes=[]; shapeIdx={};
     var seamPts=[], bands=[], area=0, over=0, holdTris=[], nHolds=0;
     var FRAME_D=0.55, ceilOver=-1e9, nCeil=0, minWallGap=1e9;
+    var clashTris=[], zoneTris=[], clashSegs=[], worstOver=-1e9, worstPt=null;
 
     computeDoor();
     for(var j2=0;j2<nb;j2++){
@@ -1141,7 +1195,21 @@
           if(wallGap<minWallGap) minWallGap=wallGap;
         });
         if(hit) nCeil++;
-        var m=new THREE.Mesh(g, fits?(hit?matCeil:matPanel):matBad);
+        // exact clash regions and the line where this panel crosses the ceiling
+        var above=function(v){ return v.y-ceilAt(v.x); };
+        [[q[0],q[1],q[2]],[q[0],q[2],q[3]]].forEach(function(tri){
+          fanInto(clipKeep(tri, above), clashTris);
+          fanInto(clipKeep(clipKeep(tri, function(v){ return -above(v); }),
+                           function(v){ return above(v)+FRAME_D; }), zoneTris);
+          var cross=[];
+          for(var e=0;e<3;e++){
+            var a=tri[e], b=tri[(e+1)%3], fa=above(a), fb=above(b);
+            if((fa>=0)!==(fb>=0)) cross.push(a.clone().lerp(b, fa/(fa-fb)));
+          }
+          if(cross.length===2) clashSegs.push(cross[0].x,cross[0].y,cross[0].z, cross[1].x,cross[1].y,cross[1].z);
+        });
+        q.forEach(function(p){ var o=p.y+FRAME_D-ceilAt(p.x); if(o>worstOver){ worstOver=o; worstPt=p.clone(); } });
+        var m=new THREE.Mesh(g, fits?matPanel:matBad);
         m.userData={kind:'panel', i:i2, j:j2, fits:fits, size:s, sig:pshape.sig, hitsCeil:hit};
         panelGroup.add(m);
         [[0,1],[1,2],[2,3],[3,0]].forEach(function(e){
@@ -1153,6 +1221,22 @@
                   fits:sample.w<=SHEET_L+1e-6&&sample.h<=SHEET_W+1e-6});
     }
 
+    (function(){
+      function setTris(mesh, arr){
+        var g=new THREE.BufferGeometry();
+        g.setAttribute('position', new THREE.Float32BufferAttribute(arr,3));
+        g.computeVertexNormals(); mesh.geometry.dispose(); mesh.geometry=g;
+      }
+      setTris(clashAbove, clashTris); setTris(clashZone, zoneTris);
+      clashLine.geometry.dispose();
+      clashLine.geometry = clashSegs.length ? segTubes(clashSegs, 0.09, 6) : new THREE.BufferGeometry();
+      if(worstPt && worstOver>0){
+        var t=Math.round(worstOver*12), txt=(t>=12?Math.floor(t/12)+"' ":'')+(t%12)+'" into ceiling';
+        clashLabel.userData.draw(txt);
+        clashLabel.position.set(worstPt.x, ceilAt(worstPt.x)+0.9, worstPt.z);
+        clashLabel.visible=true;
+      } else clashLabel.visible=false;
+    })();
     var volEdge=[], nVol=0, nChop=0;
     placeVolumes();
     vols.forEach(function(v){
@@ -1230,8 +1314,9 @@
     if(document.getElementById('sweepNote')) sweepLabel();
     var fw=[];
     var ftin=function(f){ var t=Math.round(f*12); return (t>=12?Math.floor(t/12)+"' ":'')+(t%12)+'"'; };
-    if(nCeil>0) fw.push(nCeil+' panels (orange) run into the sloped ceiling, by up to '+ftin(ceilOver)+
-                        ' including '+Math.round(FRAME_D*12)+'" of framing behind them.');
+    if(nCeil>0) fw.push(nCeil+' panels run into the sloped ceiling, by up to '+ftin(ceilOver)+
+                        ' including '+Math.round(FRAME_D*12)+'" of framing. Red: panel above the ceiling. '+
+                        'Amber: framing behind it would hit. The blue line is exactly where it meets the ceiling.');
     if(minWallGap<0.05) fw.push('The outer wall touches the room walls, leaving no space for framing there.');
     document.getElementById('fitWarn').textContent=fw.join(' ');
     document.getElementById('fitWarn').style.display = fw.length?'block':'none';
@@ -1358,7 +1443,7 @@
   function applySelection(){
     panelGroup.children.forEach(function(m){
       m.material = (selSig && m.userData.sig===selSig) ? matShape
-                 : (m.userData.fits?(m.userData.hitsCeil?matCeil:matPanel):matBad);
+                 : (m.userData.fits?matPanel:matBad);
     });
     volGroup.children.forEach(function(m){
       m.material = (selSig && m.userData.sig===selSig) ? matShape : matVol;
@@ -1701,7 +1786,7 @@
 
   // Stable orderings, so toggles and section states can travel as bit strings
   // rather than as keyed objects. Appending is safe; reordering is not.
-  var TG_KEYS=['tVols','tHolds','tWire','tSeams','tFrame','tFig','tWalls','tLamp','tInvert'];
+  var TG_KEYS=['tVols','tHolds','tWire','tSeams','tFrame','tFig','tWalls','tLamp','tInvert','tClash'];
   var SEC_KEYS=['secShape','secVol','secHold','secShow','secColor','secView','secSave','secShapes','secProfile'];
   var COL_KEYS=['cPanel','cVol','cHold','cSeam','cFrame','cFig','cFloor','cWall','cBg'];
 
@@ -1929,6 +2014,7 @@
   toggle('tWalls',function(v){ walls.userData.want=v; applyLook(); },true);
   toggle('tLamp',function(v){ lamp.visible=v; },true);
   toggle('tLook',function(v){ renderLook=v; applyLook(); },true);
+  toggle('tClash',function(v){ clashGroup.visible=v; },true);
   var roomOpEl=document.getElementById('sRoomOp');
   roomOpEl.oninput=function(){
     roomOpacity=parseFloat(roomOpEl.value)/100;
